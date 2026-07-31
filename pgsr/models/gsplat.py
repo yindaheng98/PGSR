@@ -10,7 +10,7 @@ def render_plane(
     out_all_map: torch.Tensor,
     render_alphas: torch.Tensor,
     K: torch.Tensor,
-) -> dict:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Build PGSR normal, distance and ray-plane depth outputs."""
     # https://github.com/zju3dv/PGSR/blob/e83f5cb41a49cc512964af11a794502aaa32cc8d/submodules/diff-plane-rasterization/cuda_rasterizer/forward.cu#L303-L304
     _, height, width, _ = out_all_map.shape
