@@ -4,6 +4,36 @@ import torch.nn.functional as F
 from gaussian_splatting import Camera
 from gaussian_splatting.utils import quaternion_to_matrix
 
+from .utils import normal_from_depth_image
+
+
+def render_normal(
+    viewpoint_camera: Camera,
+    depth: torch.Tensor,
+    offset: torch.Tensor | None = None,
+    # normal: torch.Tensor | None = None,
+    scale: int = 1,
+) -> torch.Tensor:
+    """Render depth-derived normals in PGSR's [C, H, W] convention."""
+    # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/gaussian_renderer/__init__.py#L21-L33
+    intrinsic_matrix = viewpoint_camera.K.to(device=depth.device, dtype=depth.dtype).clone()
+    intrinsic_matrix[0] /= scale
+    intrinsic_matrix[1] /= scale
+    extrinsic_matrix = viewpoint_camera.world_view_transform.T.contiguous().to(
+        device=depth.device, dtype=depth.dtype
+    )
+    st = max(int(scale / 2) - 1, 0)
+    if offset is not None:
+        offset = offset[st::scale, st::scale]
+    normal_ref = normal_from_depth_image(
+        depth[st::scale, st::scale],
+        intrinsic_matrix,
+        extrinsic_matrix,
+        offset,
+    )
+    normal_ref = normal_ref.permute(2, 0, 1)
+    return normal_ref
+
 
 def plane_params(
     viewpoint_camera: Camera,
