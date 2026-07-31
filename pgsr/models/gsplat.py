@@ -35,15 +35,7 @@ def render_plane(
     depth = plane_depth[0].permute(2, 0, 1)
 
     # https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/gaussian_renderer/__init__.py#L153-L165
-    return {
-        "render_normals": rendered_normal[0].permute(2, 0, 1),
-        "render_alphas": render_alphas[0].permute(2, 0, 1),
-        "depth": depth,
-        "invdepth": 1 / depth,
-
-        # PGSR specific output
-        "rendered_distance": rendered_distance[0].permute(2, 0, 1),
-    }
+    return depth, rendered_normal[0].permute(2, 0, 1), rendered_distance[0].permute(2, 0, 1), render_alphas[0].permute(2, 0, 1)
 
 
 class GsplatPGSRGaussianModel(GsplatGaussianModel):
@@ -109,18 +101,23 @@ class GsplatPGSRGaussianModel(GsplatGaussianModel):
         except:
             pass
 
+        depth, rendered_normal, rendered_distance, render_alphas = render_plane(info["render_extra_signals"], render_alphas, viewpoint_camera.K)
         return_dict = {
             "render": rendered_image,
             "visibility_filter": (radii > 0).nonzero(),
             "radii": radii,
+            "depth": depth,
+            "invdepth": 1 / depth,
             "get_viewspace_grad": lambda out: out["means2d"].grad.squeeze(0) * out["means2d"].new_tensor([[width, height]]) / 2.0,
             "means2d": means2d,
+            # Additional outputs from PGSR (normals and distortion in 2DGS convention)
+            "render_normals": rendered_normal,
+            "render_alphas": render_alphas,
+            # PGSR specific output (distance in PGSR convention)
+            "rendered_distance": rendered_distance,
         }
-        return_dict.update(
-            render_plane(info["render_extra_signals"], render_alphas, viewpoint_camera.K)
-        )
         if self.render_depth_normal:
             # https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/gaussian_renderer/__init__.py#L173-L175
             depth_normal = render_normal(viewpoint_camera, return_dict["depth"].squeeze()) * return_dict["render_alphas"].detach()
-            return_dict.update({"normals_from_depth": depth_normal})
+            return_dict.update({"normals_from_depth": depth_normal})  # in 2DGS convention
         return return_dict
