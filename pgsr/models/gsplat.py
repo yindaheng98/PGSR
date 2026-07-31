@@ -134,14 +134,11 @@ class GsplatPGSRGaussianModel(GsplatGaussianModel):
         except:
             pass
 
-        return_dict = {
+        return {
             "render": rendered_image,
             "visibility_filter": (radii > 0).nonzero(),
             "radii": radii,
             "get_viewspace_grad": lambda out: out["means2d"].grad.squeeze(0) * out["means2d"].new_tensor([[width, height]]) / 2.0,
             "means2d": means2d,
+            **render_plane(info["render_extra_signals"], render_alphas, viewpoint_camera.K)
         }
-        return_dict.update(
-            render_plane(info["render_extra_signals"], render_alphas, viewpoint_camera.K)
-        )
-        return return_dict
