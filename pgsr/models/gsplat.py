@@ -3,7 +3,7 @@ from gsplat import rasterization
 
 from gaussian_splatting.models.gsplat import GsplatGaussianModel
 
-from ..gaussian_model import plane_params
+from ..gaussian_model import plane_params, render_normal
 
 
 def render_plane(
@@ -31,7 +31,7 @@ def render_plane(
     rendered_normal = out_all_map[..., :3]
     rendered_distance = out_all_map[..., 3:4]
     # https://github.com/zju3dv/PGSR/blob/e83f5cb41a49cc512964af11a794502aaa32cc8d/submodules/diff-plane-rasterization/cuda_rasterizer/forward.cu#L404
-    plane_depth = rendered_distance / -(rendered_normal * rays[None]).sum(-1, keepdim=True) + 1.0e-8
+    plane_depth = rendered_distance / -((rendered_normal * rays[None]).sum(-1, keepdim=True) + 1.0e-8)
     depth = plane_depth[0].permute(2, 0, 1)
 
     # https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/gaussian_renderer/__init__.py#L153-L165
@@ -48,6 +48,10 @@ def render_plane(
 
 class GsplatPGSRGaussianModel(GsplatGaussianModel):
     """PGSR geometry maps rendered through gsplat ``extra_signals``."""
+
+    def __init__(self, sh_degree, render_depth_normal: bool = False):
+        super().__init__(sh_degree)
+        self.render_depth_normal = render_depth_normal
 
     def render(
         self,
@@ -105,11 +109,18 @@ class GsplatPGSRGaussianModel(GsplatGaussianModel):
         except:
             pass
 
-        return {
+        return_dict = {
             "render": rendered_image,
             "visibility_filter": (radii > 0).nonzero(),
             "radii": radii,
             "get_viewspace_grad": lambda out: out["means2d"].grad.squeeze(0) * out["means2d"].new_tensor([[width, height]]) / 2.0,
             "means2d": means2d,
-            **render_plane(info["render_extra_signals"], render_alphas, viewpoint_camera.K)
         }
+        return_dict.update(
+            render_plane(info["render_extra_signals"], render_alphas, viewpoint_camera.K)
+        )
+        if self.render_depth_normal:
+            # https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/gaussian_renderer/__init__.py#L173-L175
+            depth_normal = render_normal(viewpoint_camera, return_dict["depth"].squeeze()) * return_dict["render_alphas"].detach()
+            return_dict.update({"normals_from_depth": depth_normal})
+        return return_dict
