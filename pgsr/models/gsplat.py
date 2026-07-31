@@ -1,7 +1,11 @@
 import torch
 from gsplat import rasterization
 
-from gaussian_splatting.models.gsplat import GsplatGaussianModel
+from gaussian_splatting import Camera
+from gaussian_splatting.models.gsplat import (
+    CameraTrainableGsplatGaussianModel,
+    GsplatGaussianModel,
+)
 
 from ..gaussian_model import plane_params, render_normal
 
@@ -121,3 +125,9 @@ class GsplatPGSRGaussianModel(GsplatGaussianModel):
             depth_normal = render_normal(viewpoint_camera, return_dict["depth"].squeeze()) * return_dict["render_alphas"].detach()
             return_dict.update({"normals_from_depth": depth_normal})  # in 2DGS convention
         return return_dict
+
+
+class CameraTrainableGsplatPGSRGaussianModel(GsplatPGSRGaussianModel):
+    def forward(self, viewpoint_camera: Camera):
+        # https://github.com/yindaheng98/gaussian-splatting/blob/3c996b3f007a268353d73902f4efd04425dda5f1/gaussian_splatting/models/gsplat.py#L117-L140
+        return CameraTrainableGsplatGaussianModel.forward(self, viewpoint_camera)

@@ -8,7 +8,7 @@ from gaussian_splatting.models.gsplat_2dgs import Gsplat2DGSGaussianModel
 from gaussian_splatting.utils import quaternion_to_matrix
 
 from ..gaussian_model import render_normal
-from .gsplat import render_plane
+from .gsplat import CameraTrainableGsplatPGSRGaussianModel, render_plane
 
 
 def plane_params(
@@ -130,3 +130,9 @@ class Gsplat2DGSPGSRGaussianModel(Gsplat2DGSGaussianModel):
             "render_median": render_median,
             **plane_outputs,
         }
+
+
+class CameraTrainableGsplat2DGSPGSRGaussianModel(Gsplat2DGSPGSRGaussianModel):
+    def forward(self, viewpoint_camera: Camera):
+        # https://github.com/yindaheng98/gaussian-splatting/blob/3c996b3f007a268353d73902f4efd04425dda5f1/gaussian_splatting/models/gsplat_2dgs.py#L168-L170
+        return CameraTrainableGsplatPGSRGaussianModel.forward(self, viewpoint_camera)
