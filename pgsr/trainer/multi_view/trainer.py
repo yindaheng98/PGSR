@@ -181,4 +181,4 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
             return loss
         nearest_camera = self.dataset[random.choice(self.nearest_indices[camera_idx])]._replace(bg_color=camera.bg_color)
         nearest_out = self.model(nearest_camera)
-        return self.regularizer.regularize(loss, out, camera, nearest_out, nearest_camera)
+        return self.regularizer.regularize(loss, out, camera, nearest_out, nearest_camera, self.curr_step)
