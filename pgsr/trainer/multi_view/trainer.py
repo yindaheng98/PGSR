@@ -5,8 +5,11 @@ import torch
 import torch.nn.functional as F
 
 from gaussian_splatting import Camera
+from gaussian_splatting.dataset import CameraDataset
+from gaussian_splatting.trainer import AbstractTrainer, TrainerWrapper
 
 from ...utils.reproj import reconstruction, visibility
+from .abc import AbstractMultiViewRegularizer
 
 
 @dataclass(frozen=True)
@@ -73,3 +76,24 @@ class CameraCache:
             relative_depth_tolerance,
             min_depth, max_depth,
         )
+
+
+class MultiViewRegularizationTrainer(TrainerWrapper):
+
+    def __init__(
+            self,
+            base_trainer: AbstractTrainer,
+            dataset: CameraDataset,
+            regularizer: AbstractMultiViewRegularizer,
+            neighbor_view_n_max=8,
+            neighbor_view_update_interval=1000,
+            neighbor_view_depth_tolerance_ratio=0.05,
+            neighbor_view_depth_scale_factor=0.25,
+    ):
+        super().__init__(base_trainer)
+        self.dataset = dataset
+        self.regularizer = regularizer
+        self.neighbor_view_n_max = neighbor_view_n_max
+        self.neighbor_view_update_interval = neighbor_view_update_interval
+        self.neighbor_view_depth_tolerance_ratio = neighbor_view_depth_tolerance_ratio
+        self.neighbor_view_depth_scale_factor = neighbor_view_depth_scale_factor
