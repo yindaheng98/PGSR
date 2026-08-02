@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 import torch.nn.functional as F
 
@@ -114,6 +116,7 @@ def visibility(
         relative_depth_tolerance: float,
         min_depth: float = 0.01,  # Same as Gaussian Splatting Camera.znear.
         max_depth: float = 100.0,  # Depth values farther than this are treated as invalid.
+        depth_mask: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """Return whether world-space points are visible in the camera depth map.
 
@@ -135,11 +138,21 @@ def visibility(
         padding_mode="border",
         align_corners=True,
     )[0, 0, :, 0].reshape(z.shape)
+    rendered_mask = torch.ones_like(rendered_depth, dtype=torch.bool)
+    if depth_mask is not None:
+        rendered_mask = F.grid_sample(
+            depth_mask.float()[None, None],
+            grid.reshape(1, -1, 1, 2),
+            mode="nearest",
+            padding_mode="zeros",
+            align_corners=True,
+        )[0, 0, :, 0].reshape(z.shape) > 0.5
 
     return (  # A point is visible only if all conditions below are satisfied.
         (z > min_depth) & (z < max_depth)  # The point must be inside the valid depth range.
         & (pixels[..., 0] > 0) & (pixels[..., 0] < width)  # The projected x coordinate must be inside the image.
         & (pixels[..., 1] > 0) & (pixels[..., 1] < height)  # The projected y coordinate must be inside the image.
+        & rendered_mask
         & (rendered_depth > min_depth) & (rendered_depth < max_depth)  # The sampled depth must also be valid.
         & ((z - rendered_depth) < relative_depth_tolerance * rendered_depth)  # Reject points much farther than the depth map.
     )
