@@ -97,3 +97,8 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         self.neighbor_view_update_interval = neighbor_view_update_interval
         self.neighbor_view_depth_tolerance_ratio = neighbor_view_depth_tolerance_ratio
         self.neighbor_view_depth_scale_factor = neighbor_view_depth_scale_factor
+        camera_count = len(dataset)
+        self.camera_indices = {dataset[idx].ground_truth_image_path: idx for idx in range(camera_count)}
+        self.camera_cache: list[Optional[CameraCache]] = [None] * camera_count
+        self.nearest_indices = [[] for _ in range(camera_count)]
+        self.nearest_update_steps = [-neighbor_view_update_interval for _ in range(camera_count)]
