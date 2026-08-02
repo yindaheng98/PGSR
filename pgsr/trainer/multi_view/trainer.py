@@ -110,12 +110,6 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
     def update_nearest_cameras(self):
         pass
 
-    def find_nearest_camera(self, camera_idx: int, camera: Camera):
-        if len(self.nearest_indices[camera_idx]) == 0:
-            return None
-        nearest_idx = random.choice(self.nearest_indices[camera_idx])
-        return self.dataset[nearest_idx]._replace(bg_color=camera.bg_color)
-
     def loss(self, out: dict, camera: Camera) -> torch.Tensor:
         loss = super().loss(out, camera)
         camera_idx = self.camera_indices[camera.ground_truth_image_path]
@@ -129,8 +123,8 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         if (self.curr_step - self.multi_view_regularize_from_iter) % self.neighbor_view_update_interval == 0:
             with torch.no_grad():
                 self.update_nearest_cameras()
-        nearest_camera = self.find_nearest_camera(camera_idx, camera)
-        if nearest_camera is None:
+        if len(self.nearest_indices[camera_idx]) == 0:
             return loss
+        nearest_camera = self.dataset[random.choice(self.nearest_indices[camera_idx])]._replace(bg_color=camera.bg_color)
         nearest_out = self.model(nearest_camera)
         return self.regularizer.regularize(loss, out, camera, nearest_out, nearest_camera)
