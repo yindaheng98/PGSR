@@ -16,7 +16,6 @@ class AbstractMultiViewRegularizer(ABC):
     @abstractmethod
     def regularize(
             self,
-            loss: torch.Tensor,
             out: dict, camera: Camera,
             nearest_out: dict, nearest_camera: Camera,
             step: int,
@@ -38,9 +37,9 @@ class MultiViewRegularizerWrapper(AbstractMultiViewRegularizer):
     def model(self) -> GaussianModel:
         return self.base_regularizer.model
 
-    def regularize(self, loss, out, camera, nearest_out, nearest_camera, step: int) -> torch.Tensor:
+    def regularize(self, out, camera, nearest_out, nearest_camera, step: int) -> torch.Tensor:
         return self.base_regularizer.regularize(
-            loss, out, camera, nearest_out, nearest_camera, step
+            out, camera, nearest_out, nearest_camera, step
         )
 
 
@@ -58,5 +57,5 @@ class NoopMultiViewRegularizer(AbstractMultiViewRegularizer):
     def model(self) -> GaussianModel:
         return self._model
 
-    def regularize(self, loss, out, camera, nearest_out, nearest_camera, step: int) -> torch.Tensor:
-        return loss
+    def regularize(self, out, camera, nearest_out, nearest_camera, step: int) -> torch.Tensor:
+        return out["depth"].new_zeros(())

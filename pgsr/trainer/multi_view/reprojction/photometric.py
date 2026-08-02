@@ -61,14 +61,13 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
 
     def compute_loss(
             self,
-            loss: torch.Tensor,
             out: dict, camera: Camera,
             nearest_out: dict, nearest_camera: Camera,
             pixels: torch.Tensor,
             source_reprojected_uv: torch.Tensor, source_reprojected_z: torch.Tensor,
             step: int):
         loss = super().compute_loss(
-            loss, out, camera, nearest_out, nearest_camera,
+            out, camera, nearest_out, nearest_camera,
             pixels, source_reprojected_uv, source_reprojected_z, step,
         )
         if pixels.shape[0] == 0:

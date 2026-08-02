@@ -27,14 +27,13 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
 
     def compute_loss(
             self,
-            loss,
             out, camera,
             nearest_out, nearest_camera,
             pixels,
             source_reprojected_uv, source_reprojected_z,
             step):
         loss = super().compute_loss(
-            loss, out, camera, nearest_out, nearest_camera,
+            out, camera, nearest_out, nearest_camera,
             pixels, source_reprojected_uv, source_reprojected_z, step,
         )
         if pixels.shape[0] > 0:
@@ -44,7 +43,7 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             weights = (1.0 / torch.exp(pixel_noise)).detach()
             # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L269-L271
             geo_loss = self.geo_weight * (weights * pixel_noise).mean()
-            loss = loss + geo_loss
+            loss += geo_loss
         return loss
 
 

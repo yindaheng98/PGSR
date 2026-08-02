@@ -18,7 +18,6 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
 
     def regularize(
             self,
-            loss: torch.Tensor,
             out: dict, camera: Camera,
             nearest_out: dict, nearest_camera: Camera,
             step: int,
@@ -41,7 +40,7 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
         source_reprojected_uv = source_reprojected_uv[valid_reprojection]
         source_reprojected_z = source_reprojected_z[valid_reprojection]
         return self.compute_loss(
-            loss, out, camera, nearest_out, nearest_camera,
+            out, camera, nearest_out, nearest_camera,
             pixels, source_reprojected_uv, source_reprojected_z,
             step,
         )
@@ -49,7 +48,6 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
     @abstractmethod
     def compute_loss(
             self,
-            loss: torch.Tensor,
             out: dict, camera: Camera,
             nearest_out: dict, nearest_camera: Camera,
             pixels: torch.Tensor,
@@ -75,10 +73,10 @@ class MultiViewReprojectionRegularizerWrapper(AbstractMultiViewReprojectionRegul
         return self.base_regularizer.model
 
     def compute_loss(
-            self, loss, out, camera, nearest_out, nearest_camera,
+            self, out, camera, nearest_out, nearest_camera,
             pixels, source_reprojected_uv, source_reprojected_z, step) -> torch.Tensor:
         return self.base_regularizer.compute_loss(
-            loss, out, camera, nearest_out, nearest_camera,
+            out, camera, nearest_out, nearest_camera,
             pixels, source_reprojected_uv, source_reprojected_z, step,
         )
 
@@ -98,6 +96,6 @@ class NoopMultiViewReprojectionRegularizer(AbstractMultiViewReprojectionRegulari
         return self._model
 
     def compute_loss(
-            self, loss, out, camera, nearest_out, nearest_camera,
+            self, out, camera, nearest_out, nearest_camera,
             pixels, source_reprojected_uv, source_reprojected_z, step) -> torch.Tensor:
-        return loss
+        return out["render"].new_zeros(())
