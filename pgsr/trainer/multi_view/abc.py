@@ -14,13 +14,20 @@ class AbstractMultiViewRegularizer(ABC):
         raise ValueError("Model is not set")
 
     @abstractmethod
-    def regularize(
+    def regularize_with_nearest_gt_camera(
             self,
             out: dict, camera: Camera,
             nearest_out: dict, nearest_camera: Camera,
             step: int,
     ) -> torch.Tensor:
         raise NotImplementedError
+
+    def regularize_without_nearest_gt_camera(
+            self,
+            out: dict, camera: Camera,
+            step: int,
+    ) -> torch.Tensor:
+        return out["render"].new_zeros(())
 
 
 class MultiViewRegularizerWrapper(AbstractMultiViewRegularizer):
@@ -37,9 +44,14 @@ class MultiViewRegularizerWrapper(AbstractMultiViewRegularizer):
     def model(self) -> GaussianModel:
         return self.base_regularizer.model
 
-    def regularize(self, out, camera, nearest_out, nearest_camera, step: int) -> torch.Tensor:
-        return self.base_regularizer.regularize(
+    def regularize_with_nearest_gt_camera(self, out, camera, nearest_out, nearest_camera, step: int) -> torch.Tensor:
+        return self.base_regularizer.regularize_with_nearest_gt_camera(
             out, camera, nearest_out, nearest_camera, step
+        )
+
+    def regularize_without_nearest_gt_camera(self, out, camera, step: int) -> torch.Tensor:
+        return self.base_regularizer.regularize_without_nearest_gt_camera(
+            out, camera, step
         )
 
 
@@ -57,5 +69,5 @@ class NoopMultiViewRegularizer(AbstractMultiViewRegularizer):
     def model(self) -> GaussianModel:
         return self._model
 
-    def regularize(self, out, camera, nearest_out, nearest_camera, step: int) -> torch.Tensor:
+    def regularize_with_nearest_gt_camera(self, out, camera, nearest_out, nearest_camera, step: int) -> torch.Tensor:
         return out["render"].new_zeros(())

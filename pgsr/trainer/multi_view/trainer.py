@@ -181,10 +181,10 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
             with torch.no_grad():
                 self.update_nearest_cameras()
         if len(self.nearest_indices[camera_idx]) == 0:
-            return loss
+            return loss + self.regularizer.regularize_without_nearest_gt_camera(out, camera, self.curr_step)
         nearest_camera = self.dataset[random.choice(self.nearest_indices[camera_idx])]._replace(bg_color=camera.bg_color)
         nearest_out = self.model(nearest_camera)
-        return loss + self.regularizer.regularize(out, camera, nearest_out, nearest_camera, self.curr_step)
+        return loss + self.regularizer.regularize_with_nearest_gt_camera(out, camera, nearest_out, nearest_camera, self.curr_step)
 
     @classmethod
     def from_regularizer_constructor(
