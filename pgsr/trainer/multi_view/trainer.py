@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from gaussian_splatting import Camera
 
-from ...utils.reproj import reconstruction
+from ...utils.reproj import reconstruction, visibility
 
 
 @dataclass(frozen=True)
@@ -54,5 +54,12 @@ class CameraCache:
             depth=depth,
         )
 
-    def reconstruction(self) -> torch.Tensor:
-        return reconstruction(self.K, self.R_c2w, self.T_c2w, self.depth)
+    def reconstruction(self, min_depth: float = 0.01, max_depth: float = 100.0) -> torch.Tensor:
+        # Keep only depths inside the trusted range before returning xyz samples.
+        valid = (self.depth > min_depth) & (self.depth < max_depth)
+        xyz = reconstruction(self.K, self.R_c2w, self.T_c2w, self.depth)
+        return xyz[valid]
+
+    def visibility(self, xyz: torch.Tensor, depth_threshold: float, min_depth: float = 0.01, max_depth: float = 100.0) -> torch.Tensor:
+        # Test the input world-space points against this cache's camera and depth map.
+        return visibility(self.K, self.R_c2w, self.T_c2w, self.depth, xyz, depth_threshold, min_depth, max_depth)
