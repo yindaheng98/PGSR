@@ -53,9 +53,7 @@ class DepthNormalConsistencyTrainer(TrainerWrapper):
 
 def DepthNormalConsistencyTrainerWrapper(
         base_trainer_constructor: Callable[..., AbstractTrainer],
-        model: GaussianModel,
-        dataset: CameraDataset,
-        *args,
+        model: GaussianModel, dataset: CameraDataset, *args,
         depth_normal_consistency_weight=0.015,
         depth_normal_consistency_from_iter=7000,
         depth_normal_consistency_edge_aware=True,

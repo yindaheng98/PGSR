@@ -28,9 +28,7 @@ class PlanarScaleTrainer(TrainerWrapper):
 
 def PlanarScaleTrainerWrapper(
         base_trainer_constructor: Callable[..., AbstractTrainer],
-        model: GaussianModel,
-        dataset: CameraDataset,
-        *args,
+        model: GaussianModel, dataset: CameraDataset, *args,
         scale_loss_weight=100.0,
         **configs) -> PlanarScaleTrainer:
     return PlanarScaleTrainer(
