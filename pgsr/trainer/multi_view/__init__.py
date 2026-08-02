@@ -1,0 +1,2 @@
+from .abc import AbstractMultiViewRegularizer, MultiViewRegularizerWrapper, NoopMultiViewRegularizer
+from .trainer import MultiViewRegularizationTrainer
