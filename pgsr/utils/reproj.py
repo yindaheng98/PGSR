@@ -34,15 +34,18 @@ def visibility(
         xyz: torch.Tensor,
         depth_threshold: float,
         min_depth: float = 0.01,  # Same as Gaussian Splatting Camera.znear.
+        max_depth: float = 100.0,  # Depth values farther than this are treated as invalid.
 ) -> torch.Tensor:
     """Return whether world-space points are visible in the camera depth map."""
     uv, z = projection(K, R_c2w, T_c2w, xyz)
     pixels = uv[..., :2]
     height, width = depth.shape
 
+    # grid_sample expects normalized coordinates in [-1, 1].
     grid = pixels.clone()
     grid[..., 0] = 2.0 * grid[..., 0] / (width - 1) - 1.0
     grid[..., 1] = 2.0 * grid[..., 1] / (height - 1) - 1.0
+    # Sample the rendered depth map at each projected point location.
     rendered_depth = F.grid_sample(
         depth[None, None],
         grid.reshape(1, -1, 1, 2),
@@ -52,9 +55,9 @@ def visibility(
     )[0, 0, :, 0].reshape(z.shape)
 
     return (  # A point is visible only if all conditions below are satisfied.
-        (z > min_depth)  # The point must be in front of the near clipping plane.
+        (z > min_depth) & (z < max_depth)  # The point must be inside the valid depth range.
         & (pixels[..., 0] > 0) & (pixels[..., 0] < width)  # The projected x coordinate must be inside the image.
         & (pixels[..., 1] > 0) & (pixels[..., 1] < height)  # The projected y coordinate must be inside the image.
-        & torch.isfinite(rendered_depth) & (rendered_depth > min_depth)  # The sampled depth must be in front of znear.
+        & (rendered_depth > min_depth) & (rendered_depth < max_depth)  # The sampled depth must also be valid.
         & ((z - rendered_depth) < depth_threshold * rendered_depth)  # Reject points that are much farther than the depth map.
     )
