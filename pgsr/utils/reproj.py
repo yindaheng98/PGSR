@@ -17,13 +17,13 @@ def reconstruction(K: torch.Tensor, R_c2w: torch.Tensor, T_c2w: torch.Tensor, de
 
 # Source: https://github.com/yindaheng98/PostRenderPerspectiveAlign/blob/86967a863d01f8eb5c56d82a1283d9c3e2f94bdb/prpa/reproj.py#L17-L24
 def projection(K: torch.Tensor, R_c2w: torch.Tensor, T_c2w: torch.Tensor, xyz: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    """Project point cloud to camera"""
-    height, width = xyz.shape[:2]
+    """Project world-space points to camera pixels, preserving all leading dimensions."""
+    shape = xyz.shape[:-1]
     xyz_world = xyz.reshape(-1, 3).T
     xyz_camera = torch.inverse(R_c2w) @ (xyz_world - T_c2w.unsqueeze(1))
     uvz = K @ xyz_camera
-    uv = (uvz/uvz[-1, ...]).T.reshape(height, width, 3)
-    return uv, uvz[-1, ...].reshape(height, width)
+    uv = (uvz / uvz[-1, ...]).T.reshape(*shape, 3)
+    return uv, uvz[-1, ...].reshape(*shape)
 
 
 def visibility(
