@@ -39,7 +39,7 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
                     mode="bilinear",
                     align_corners=True,
                 )[0]
-            gray_image = (0.299 * resized_image_rgb[0] + 0.587 * resized_image_rgb[1] + 0.114 * resized_image_rgb[2])[None]
+            gray_image = 0.299 * resized_image_rgb[0] + 0.587 * resized_image_rgb[1] + 0.114 * resized_image_rgb[2]
 
             # Code source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/scene/cameras.py#L128-L132
             K = camera.K.detach().clone()
