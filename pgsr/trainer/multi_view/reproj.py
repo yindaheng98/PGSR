@@ -25,14 +25,14 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
         c2w = torch.linalg.inv(camera.world_view_transform)
         nearest_c2w = torch.linalg.inv(nearest_camera.world_view_transform)
         pixels, source_reprojected_uv, source_reprojected_z = reprojection(
-            camera.K,
-            c2w[:3, :3].transpose(-1, -2),
-            c2w[3, :3],
-            out["depth"].squeeze(),
-            nearest_camera.K,
-            nearest_c2w[:3, :3].transpose(-1, -2),
-            nearest_c2w[3, :3],
-            nearest_out["depth"].squeeze(),
+            source_K=camera.K,
+            source_R_c2w=c2w[:3, :3].transpose(-1, -2),
+            source_T_c2w=c2w[3, :3],
+            source_depth=out["depth"].squeeze(),
+            target_K=nearest_camera.K,
+            target_R_c2w=nearest_c2w[:3, :3].transpose(-1, -2),
+            target_T_c2w=nearest_c2w[3, :3],
+            target_depth=nearest_out["depth"].squeeze(),
         )
         reprojection_error = torch.norm(source_reprojected_uv[:, :2] - pixels, dim=-1)
         valid_reprojection = reprojection_error < self.max_reprojection_error
@@ -66,7 +66,7 @@ class MultiViewReprojectionRegularizerWrapper(AbstractMultiViewReprojectionRegul
     '''
 
     def __init__(self, base_regularizer: AbstractMultiViewReprojectionRegularizer):
-        super().__init__(base_regularizer.max_reprojection_error)
+        super().__init__(max_reprojection_error=base_regularizer.max_reprojection_error)
         self.base_regularizer = base_regularizer
 
     @property
@@ -89,7 +89,7 @@ class NoopMultiViewReprojectionRegularizer(AbstractMultiViewReprojectionRegulari
     '''
 
     def __init__(self, model: GaussianModel, *args, max_reprojection_error=1.0, **configs):
-        super().__init__(max_reprojection_error)
+        super().__init__(max_reprojection_error=max_reprojection_error)
         self._model = model
 
     @property

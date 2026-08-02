@@ -74,7 +74,10 @@ class CameraCache:
             indexing="ij",
         )
         pixels = torch.stack((x, y), dim=-1)
-        return reconstruct_pixels(self.K, self.R_c2w, self.T_c2w, pixels[valid], self.depth[valid])
+        return reconstruct_pixels(
+            K=self.K, R_c2w=self.R_c2w, T_c2w=self.T_c2w,
+            pixels=pixels[valid], depth=self.depth[valid],
+        )
 
     def visibility(
             self,
