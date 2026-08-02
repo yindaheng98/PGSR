@@ -32,11 +32,14 @@ def visibility(
         T_c2w: torch.Tensor,
         depth: torch.Tensor,
         xyz: torch.Tensor,
-        depth_threshold: float,
+        relative_depth_tolerance: float,
         min_depth: float = 0.01,  # Same as Gaussian Splatting Camera.znear.
         max_depth: float = 100.0,  # Depth values farther than this are treated as invalid.
 ) -> torch.Tensor:
-    """Return whether world-space points are visible in the camera depth map."""
+    """Return whether world-space points are visible in the camera depth map.
+
+    relative_depth_tolerance is a fraction of the sampled rendered depth.
+    """
     uv, z = projection(K, R_c2w, T_c2w, xyz)
     pixels = uv[..., :2]
     height, width = depth.shape
@@ -59,5 +62,5 @@ def visibility(
         & (pixels[..., 0] > 0) & (pixels[..., 0] < width)  # The projected x coordinate must be inside the image.
         & (pixels[..., 1] > 0) & (pixels[..., 1] < height)  # The projected y coordinate must be inside the image.
         & (rendered_depth > min_depth) & (rendered_depth < max_depth)  # The sampled depth must also be valid.
-        & ((z - rendered_depth) < depth_threshold * rendered_depth)  # Reject points that are much farther than the depth map.
+        & ((z - rendered_depth) < relative_depth_tolerance * rendered_depth)  # Reject points much farther than the depth map.
     )
