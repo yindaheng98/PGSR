@@ -2,17 +2,34 @@ import torch
 import torch.nn.functional as F
 
 
-# Source: https://github.com/yindaheng98/PostRenderPerspectiveAlign/blob/86967a863d01f8eb5c56d82a1283d9c3e2f94bdb/prpa/reproj.py#L5-L14
 def reconstruction(K: torch.Tensor, R_c2w: torch.Tensor, T_c2w: torch.Tensor, depth: torch.Tensor) -> torch.Tensor:
     """Reconstruct point cloud from camera and depth map"""
     height, width = depth.shape
-    uv = torch.ones((height, width, 3), dtype=depth.dtype, device=depth.device)
+    uv = torch.empty((height, width, 2), dtype=depth.dtype, device=depth.device)
     uv[..., 0] = torch.arange(0, width, dtype=depth.dtype, device=depth.device).unsqueeze(0).expand(height, -1)
     uv[..., 1] = torch.arange(0, height, dtype=depth.dtype, device=depth.device).unsqueeze(1).expand(-1, width)
-    xyz_camera = torch.inverse(K) @ uv.reshape(-1, 3).T * depth.reshape(-1)
-    # xyz_camera = torch.from_numpy(np.asarray(pcd.points, dtype=np.float32)).T*1000
+    return reconstruct_pixels(K, R_c2w, T_c2w, uv, depth)
+
+
+def reconstruct_pixels(
+        K: torch.Tensor,
+        R_c2w: torch.Tensor,
+        T_c2w: torch.Tensor,
+        pixels: torch.Tensor,
+        depth: torch.Tensor,
+) -> torch.Tensor:
+    """Reconstruct world-space points from pixel coordinates and matching depths."""
+    shape = pixels.shape[:-1]
+    if shape != depth.shape:
+        raise ValueError(f"pixels leading shape {shape} must match depth shape {depth.shape}")
+    depth_flat = depth.reshape(-1)
+    pixels_h = torch.cat((
+        pixels.reshape(-1, 2),
+        torch.ones((depth_flat.shape[0], 1), device=depth.device, dtype=depth.dtype),
+    ), dim=-1)
+    xyz_camera = torch.inverse(K) @ pixels_h.T * depth_flat
     xyz_world = R_c2w @ xyz_camera + T_c2w.unsqueeze(1)
-    return xyz_world.T.reshape(*uv.shape)
+    return xyz_world.T.reshape(*shape, 3)
 
 
 # Source: https://github.com/yindaheng98/PostRenderPerspectiveAlign/blob/86967a863d01f8eb5c56d82a1283d9c3e2f94bdb/prpa/reproj.py#L17-L24
