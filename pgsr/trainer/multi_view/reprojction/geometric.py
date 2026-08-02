@@ -5,7 +5,7 @@ import torch
 from gaussian_splatting import GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 
-from .reproj import AbstractMultiViewReprojectionRegularizer, MultiViewReprojectionRegularizerWrapper
+from .abc import AbstractMultiViewReprojectionRegularizer, MultiViewReprojectionRegularizerWrapper
 
 
 class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):

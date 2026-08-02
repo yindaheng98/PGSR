@@ -6,8 +6,8 @@ import torch.nn.functional as F
 from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 
-from ...utils import lncc, patch_offsets, patch_warp
-from .reproj import AbstractMultiViewReprojectionRegularizer, MultiViewReprojectionRegularizerWrapper
+from ....utils import lncc, patch_offsets, patch_warp
+from .abc import AbstractMultiViewReprojectionRegularizer, MultiViewReprojectionRegularizerWrapper
 
 
 class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):

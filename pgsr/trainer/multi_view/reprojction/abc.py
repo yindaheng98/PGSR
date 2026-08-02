@@ -4,8 +4,8 @@ import torch
 
 from gaussian_splatting import Camera, GaussianModel
 
-from ...utils import reprojection
-from .abc import AbstractMultiViewRegularizer
+from ....utils import reprojection
+from ..abc import AbstractMultiViewRegularizer
 
 
 class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
