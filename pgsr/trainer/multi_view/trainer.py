@@ -1,10 +1,11 @@
+import random
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 import torch
 import torch.nn.functional as F
 
-from gaussian_splatting import Camera
+from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.trainer import AbstractTrainer, TrainerWrapper
 
@@ -105,4 +106,31 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         self.camera_indices = {dataset[idx].ground_truth_image_path: idx for idx in range(camera_count)}
         self.camera_cache: list[Optional[CameraCache]] = [None] * camera_count
         self.nearest_indices = [[] for _ in range(camera_count)]
-        self.nearest_update_steps = [-neighbor_view_update_interval for _ in range(camera_count)]
+
+    def update_nearest_cameras(self):
+        pass
+
+    def find_nearest_camera(self, camera_idx: int, camera: Camera):
+        if len(self.nearest_indices[camera_idx]) == 0:
+            return None
+        nearest_idx = random.choice(self.nearest_indices[camera_idx])
+        return self.dataset[nearest_idx]._replace(bg_color=camera.bg_color)
+
+    def loss(self, out: dict, camera: Camera) -> torch.Tensor:
+        loss = super().loss(out, camera)
+        camera_idx = self.camera_indices[camera.ground_truth_image_path]
+        with torch.no_grad():
+            self.camera_cache[camera_idx] = CameraCache.from_camera(
+                camera, out["depth"], out.get("render_alphas"),
+                self.neighbor_view_depth_scale_factor,
+            )
+        if not self.multi_view_regularize_from_iter <= self.curr_step <= self.multi_view_regularize_until_iter:
+            return loss
+        if (self.curr_step - self.multi_view_regularize_from_iter) % self.neighbor_view_update_interval == 0:
+            with torch.no_grad():
+                self.update_nearest_cameras()
+        nearest_camera = self.find_nearest_camera(camera_idx, camera)
+        if nearest_camera is None:
+            return loss
+        nearest_out = self.model(nearest_camera)
+        return self.regularizer.regularize(loss, out, camera, nearest_out, nearest_camera)
