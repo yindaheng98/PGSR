@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from gaussian_splatting import Camera
+from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.trainer import AbstractTrainer, TrainerWrapper
 
@@ -185,3 +185,41 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         nearest_camera = self.dataset[random.choice(self.nearest_indices[camera_idx])]._replace(bg_color=camera.bg_color)
         nearest_out = self.model(nearest_camera)
         return self.regularizer.regularize(loss, out, camera, nearest_out, nearest_camera, self.curr_step)
+
+    @classmethod
+    def from_regularizer_constructor(
+            cls,
+            base_trainer_constructor: Callable[..., AbstractTrainer],
+            regularizer_constructor: Callable[..., AbstractMultiViewRegularizer],
+            model: GaussianModel,
+            dataset: CameraDataset,
+            *args,
+            # copy from MultiViewRegularizationTrainer.__init__
+            multi_view_regularize_from_iter=7000,
+            multi_view_regularize_until_iter=30000,
+            neighbor_view_n_max=8,
+            neighbor_view_update_interval=1000,
+            neighbor_view_depth_tolerance_ratio=0.05,
+            neighbor_view_depth_scale_factor=0.25,
+            # copy from MultiViewRegularizationTrainer.__init__
+            **configs,
+    ) -> "MultiViewRegularizationTrainer":
+        prefix = "multi_view_regularize."
+        multi_view_configs = {
+            key.removeprefix(prefix): configs.pop(key)
+            for key in list(configs)
+            if key.startswith(prefix)
+        }
+        base_trainer = base_trainer_constructor(model, dataset, *args, **configs)
+        regularizer = regularizer_constructor(model, dataset, **multi_view_configs)
+        return cls(
+            base_trainer,
+            dataset,
+            regularizer,
+            multi_view_regularize_from_iter=multi_view_regularize_from_iter,
+            multi_view_regularize_until_iter=multi_view_regularize_until_iter,
+            neighbor_view_n_max=neighbor_view_n_max,
+            neighbor_view_update_interval=neighbor_view_update_interval,
+            neighbor_view_depth_tolerance_ratio=neighbor_view_depth_tolerance_ratio,
+            neighbor_view_depth_scale_factor=neighbor_view_depth_scale_factor,
+        )
