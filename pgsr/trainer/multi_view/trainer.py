@@ -6,11 +6,11 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from gaussian_splatting import Camera, GaussianModel
+from gaussian_splatting import Camera
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.trainer import AbstractTrainer, TrainerWrapper
 
-from ...utils.reproj import reconstruct_pixels, visibility
+from ...utils import reconstruct_pixels, visibility
 from .abc import AbstractMultiViewRegularizer
 
 

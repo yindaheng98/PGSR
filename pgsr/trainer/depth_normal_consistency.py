@@ -6,7 +6,7 @@ from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.trainer import AbstractTrainer, TrainerWrapper
 
-from ..utils.loss import get_img_grad_weight
+from ..utils import get_img_grad_weight
 
 
 class DepthNormalConsistencyTrainer(TrainerWrapper):
