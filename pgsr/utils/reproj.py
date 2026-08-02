@@ -43,6 +43,68 @@ def projection(K: torch.Tensor, R_c2w: torch.Tensor, T_c2w: torch.Tensor, xyz: t
     return uv, uvz[-1, ...].reshape(*shape)
 
 
+def reprojection(
+        source_K: torch.Tensor,
+        source_R_c2w: torch.Tensor,
+        source_T_c2w: torch.Tensor,
+        source_depth: torch.Tensor,
+        target_K: torch.Tensor,
+        target_R_c2w: torch.Tensor,
+        target_T_c2w: torch.Tensor,
+        target_depth: torch.Tensor,
+        min_depth: float = 0.01,
+        max_depth: float = 100.0,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Project source depth pixels to a target view, sample target depth, and project back."""
+    height, width = source_depth.shape
+    y, x = torch.meshgrid(
+        torch.arange(height, device=source_depth.device, dtype=source_depth.dtype),
+        torch.arange(width, device=source_depth.device, dtype=source_depth.dtype),
+        indexing="ij",
+    )
+    source_pixels = torch.stack((x, y), dim=-1).reshape(-1, 2)
+
+    source_world = reconstruction(source_K, source_R_c2w, source_T_c2w, source_depth).reshape(-1, 3)
+    target_uv, target_z = projection(target_K, target_R_c2w, target_T_c2w, source_world)
+    target_pixels = target_uv[:, :2]
+
+    target_height, target_width = target_depth.shape
+    valid_mask = (
+        (target_pixels[:, 0] > 0) & (target_pixels[:, 0] < target_width)
+        & (target_pixels[:, 1] > 0) & (target_pixels[:, 1] < target_height)
+        & (target_z > min_depth) & (target_z < max_depth)
+    )
+    source_pixels = source_pixels[valid_mask]
+    target_pixels = target_pixels[valid_mask]
+    if target_pixels.shape[0] == 0:
+        return source_pixels, source_pixels.new_empty((0, 3)), source_pixels.new_empty((0,))
+
+    grid = target_pixels.clone()
+    grid[:, 0] = 2.0 * grid[:, 0] / (target_width - 1) - 1.0
+    grid[:, 1] = 2.0 * grid[:, 1] / (target_height - 1) - 1.0
+    target_depth_samples = F.grid_sample(
+        target_depth[None, None],
+        grid.view(1, -1, 1, 2),
+        mode="nearest",
+        padding_mode="border",
+        align_corners=True,
+    )[0, 0, :, 0]
+    valid_mask = (target_depth_samples > min_depth) & (target_depth_samples < max_depth)
+    source_pixels = source_pixels[valid_mask]
+    target_pixels = target_pixels[valid_mask]
+    target_depth_samples = target_depth_samples[valid_mask]
+    if target_pixels.shape[0] == 0:
+        return source_pixels, source_pixels.new_empty((0, 3)), source_pixels.new_empty((0,))
+
+    reprojected_world = reconstruct_pixels(
+        target_K, target_R_c2w, target_T_c2w, target_pixels, target_depth_samples,
+    )
+    source_reprojected_uv, source_reprojected_z = projection(
+        source_K, source_R_c2w, source_T_c2w, reprojected_world,
+    )
+    return source_pixels, source_reprojected_uv, source_reprojected_z
+
+
 def visibility(
         K: torch.Tensor,
         R_c2w: torch.Tensor,
@@ -69,7 +131,7 @@ def visibility(
     rendered_depth = F.grid_sample(
         depth[None, None],
         grid.reshape(1, -1, 1, 2),
-        mode="bilinear",
+        mode="nearest",
         padding_mode="border",
         align_corners=True,
     )[0, 0, :, 0].reshape(z.shape)
