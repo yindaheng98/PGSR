@@ -10,7 +10,7 @@ from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.trainer import AbstractTrainer, TrainerWrapper
 
-from ...utils.reproj import reconstruction, visibility
+from ...utils.reproj import reconstruct_pixels, visibility
 from .abc import AbstractMultiViewRegularizer
 
 
@@ -20,6 +20,7 @@ class CameraCache:
     R_c2w: torch.Tensor
     T_c2w: torch.Tensor
     depth: torch.Tensor
+    alpha: Optional[torch.Tensor]
 
     @classmethod
     def from_camera(
@@ -28,7 +29,6 @@ class CameraCache:
             depth: torch.Tensor,
             alpha: Optional[torch.Tensor] = None,
             scale_factor: float = 1.0,
-            alpha_threshold: float = 1e-4,
     ) -> "CameraCache":
         K = camera.K.detach().clone()
         K[:2] *= scale_factor
@@ -38,8 +38,7 @@ class CameraCache:
             depth = F.interpolate(
                 depth,
                 scale_factor=scale_factor,
-                mode="bilinear",
-                align_corners=False,
+                mode="nearest",
             )
         depth = depth[0, 0].contiguous()
         if alpha is not None:
@@ -48,35 +47,52 @@ class CameraCache:
                 alpha = F.interpolate(
                     alpha,
                     scale_factor=scale_factor,
-                    mode="bilinear",
-                    align_corners=False,
+                    mode="nearest",
                 )
-            depth = depth.masked_fill(alpha[0, 0] < alpha_threshold, 0)
+            alpha = alpha[0, 0].contiguous()
         return cls(
             K=K,
             R_c2w=c2w[:3, :3].transpose(-1, -2),
             T_c2w=c2w[3, :3],
             depth=depth,
+            alpha=alpha,
         )
 
-    def reconstruction(self, min_depth: float = 0.01, max_depth: float = 100.0) -> torch.Tensor:
+    def reconstruction(
+            self,
+            min_depth: float = 0.01, max_depth: float = 100.0,
+            alpha_threshold: float = 1e-4,
+    ) -> torch.Tensor:
         # Keep only depths inside the trusted range before returning xyz samples.
         valid = (self.depth > min_depth) & (self.depth < max_depth)
-        xyz = reconstruction(self.K, self.R_c2w, self.T_c2w, self.depth)
-        return xyz[valid]
+        if self.alpha is not None:
+            valid = valid & (self.alpha >= alpha_threshold)
+        height, width = self.depth.shape
+        y, x = torch.meshgrid(
+            torch.arange(height, device=self.depth.device, dtype=self.depth.dtype),
+            torch.arange(width, device=self.depth.device, dtype=self.depth.dtype),
+            indexing="ij",
+        )
+        pixels = torch.stack((x, y), dim=-1)
+        return reconstruct_pixels(self.K, self.R_c2w, self.T_c2w, pixels[valid], self.depth[valid])
 
     def visibility(
             self,
             xyz: torch.Tensor,
             relative_depth_tolerance: float,
             min_depth: float = 0.01, max_depth: float = 100.0,
+            alpha_threshold: float = 1e-4,
     ) -> torch.Tensor:
         # Test the input world-space points against this cache's camera and depth map.
+        depth_mask = (self.depth > min_depth) & (self.depth < max_depth)
+        if self.alpha is not None:
+            depth_mask = depth_mask & (self.alpha >= alpha_threshold)
         return visibility(
-            self.K, self.R_c2w, self.T_c2w, self.depth,
-            xyz,
-            relative_depth_tolerance,
-            min_depth, max_depth,
+            K=self.K, R_c2w=self.R_c2w, T_c2w=self.T_c2w,
+            depth=self.depth, xyz=xyz,
+            relative_depth_tolerance=relative_depth_tolerance,
+            min_depth=min_depth, max_depth=max_depth,
+            depth_mask=depth_mask,
         )
 
 
