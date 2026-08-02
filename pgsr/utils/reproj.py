@@ -51,13 +51,10 @@ def visibility(
         align_corners=True,
     )[0, 0, :, 0].reshape(z.shape)
 
-    return (
-        (z > min_depth)
-        & (pixels[..., 0] > 0)
-        & (pixels[..., 0] < width)
-        & (pixels[..., 1] > 0)
-        & (pixels[..., 1] < height)
-        & torch.isfinite(rendered_depth)
-        & (rendered_depth > 0)
-        & ((z - rendered_depth) < depth_threshold * rendered_depth)
+    return (  # A point is visible only if all conditions below are satisfied.
+        (z > min_depth)  # The point must be in front of the near clipping plane.
+        & (pixels[..., 0] > 0) & (pixels[..., 0] < width)  # The projected x coordinate must be inside the image.
+        & (pixels[..., 1] > 0) & (pixels[..., 1] < height)  # The projected y coordinate must be inside the image.
+        & torch.isfinite(rendered_depth) & (rendered_depth > 0)  # The sampled depth must be finite and positive.
+        & ((z - rendered_depth) < depth_threshold * rendered_depth)  # Reject points that are much farther than the depth map.
     )
