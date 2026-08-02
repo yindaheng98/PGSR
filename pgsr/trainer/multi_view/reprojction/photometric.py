@@ -15,18 +15,18 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
     def __init__(
             self,
             base_regularizer: AbstractMultiViewReprojectionRegularizer,
-            multi_view_ncc_weight=0.15,
-            multi_view_patch_size=3,
-            multi_view_sample_num=102400,
-            multi_view_ncc_scale_factor=1.0,
+            ncc_weight=0.15,
+            ncc_patch_size=3,
+            ncc_sample_num=102400,
+            ncc_scale_factor=1.0,
     ):
         super().__init__(base_regularizer)
-        if multi_view_ncc_scale_factor <= 0:
-            raise ValueError("multi_view_ncc_scale_factor must be positive")
-        self.multi_view_ncc_weight = multi_view_ncc_weight
-        self.multi_view_patch_size = multi_view_patch_size
-        self.multi_view_sample_num = multi_view_sample_num
-        self.multi_view_ncc_scale_factor = multi_view_ncc_scale_factor
+        if ncc_scale_factor <= 0:
+            raise ValueError("ncc_scale_factor must be positive")
+        self.ncc_weight = ncc_weight
+        self.ncc_patch_size = ncc_patch_size
+        self.ncc_sample_num = ncc_sample_num
+        self.ncc_scale_factor = ncc_scale_factor
         self.ncc_grayscale_cache: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
 
     def ncc_grayscale_and_k(self, camera: Camera) -> tuple[torch.Tensor, torch.Tensor]:
@@ -37,10 +37,10 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
         with torch.no_grad():
             # Code source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/scene/cameras.py#L32-L48
             resized_image_rgb = camera.ground_truth_image.detach()
-            if self.multi_view_ncc_scale_factor != 1.0:
+            if self.ncc_scale_factor != 1.0:
                 resized_image_rgb = F.interpolate(
                     resized_image_rgb[None],
-                    scale_factor=self.multi_view_ncc_scale_factor,
+                    scale_factor=self.ncc_scale_factor,
                     mode="bilinear",
                     align_corners=True,
                 )[0]
@@ -48,7 +48,7 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
 
             # Code source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/scene/cameras.py#L128-L132
             K = camera.K.detach().clone()
-            K[:2] *= self.multi_view_ncc_scale_factor
+            K[:2] *= self.ncc_scale_factor
         self.ncc_grayscale_cache[image_path] = (gray_image, K)
         return gray_image, K
 
@@ -67,11 +67,11 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
         if pixels.shape[0] == 0:
             return loss
 
-        patch_size = self.multi_view_patch_size
-        sample_num = self.multi_view_sample_num
+        patch_size = self.ncc_patch_size
+        sample_num = self.ncc_sample_num
         total_patch_size = (patch_size * 2 + 1) ** 2
-        ncc_weight = self.multi_view_ncc_weight
-        ncc_scale_factor = self.multi_view_ncc_scale_factor
+        ncc_weight = self.ncc_weight
+        ncc_scale_factor = self.ncc_scale_factor
         with torch.no_grad():
             # Code source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L273-L281
             # sample mask
@@ -147,10 +147,10 @@ def MultiViewPhotometricRegularizerWrapper(
         model: GaussianModel,
         dataset: CameraDataset,
         *args,
-        multi_view_ncc_weight=0.15,
-        multi_view_patch_size=3,
-        multi_view_sample_num=102400,
-        multi_view_ncc_scale_factor=1.0,
+        ncc_weight=0.15,
+        ncc_patch_size=3,
+        ncc_sample_num=102400,
+        ncc_scale_factor=1.0,
         max_reprojection_error=1.0,
         **configs) -> MultiViewPhotometricRegularizer:
     return MultiViewPhotometricRegularizer(
@@ -161,8 +161,8 @@ def MultiViewPhotometricRegularizerWrapper(
             max_reprojection_error=max_reprojection_error,
             **configs,
         ),
-        multi_view_ncc_weight=multi_view_ncc_weight,
-        multi_view_patch_size=multi_view_patch_size,
-        multi_view_sample_num=multi_view_sample_num,
-        multi_view_ncc_scale_factor=multi_view_ncc_scale_factor,
+        ncc_weight=ncc_weight,
+        ncc_patch_size=ncc_patch_size,
+        ncc_sample_num=ncc_sample_num,
+        ncc_scale_factor=ncc_scale_factor,
     )

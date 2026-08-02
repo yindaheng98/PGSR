@@ -3,6 +3,7 @@ from abc import abstractmethod
 import torch
 
 from gaussian_splatting import Camera, GaussianModel
+from gaussian_splatting.dataset import CameraDataset
 
 from ....utils import reprojection
 from ..abc import AbstractMultiViewRegularizer
@@ -88,7 +89,7 @@ class NoopMultiViewReprojectionRegularizer(AbstractMultiViewReprojectionRegulari
     It is used as the base of all multi-view regularizer wrapper.
     '''
 
-    def __init__(self, model: GaussianModel, *args, max_reprojection_error=1.0, **configs):
+    def __init__(self, model: GaussianModel, dataset: CameraDataset, max_reprojection_error=1.0):
         super().__init__(max_reprojection_error=max_reprojection_error)
         self._model = model
 

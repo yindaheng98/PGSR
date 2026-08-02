@@ -13,10 +13,10 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
     def __init__(
             self,
             base_regularizer: AbstractMultiViewReprojectionRegularizer,
-            multi_view_geo_weight=0.03,
+            geo_weight=0.03,
     ):
         super().__init__(base_regularizer)
-        self.multi_view_geo_weight = multi_view_geo_weight
+        self.geo_weight = geo_weight
 
     def compute_loss(
             self,
@@ -36,7 +36,7 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L237
             weights = (1.0 / torch.exp(pixel_noise)).detach()
             # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L269-L271
-            geo_loss = self.multi_view_geo_weight * (weights * pixel_noise).mean()
+            geo_loss = self.geo_weight * (weights * pixel_noise).mean()
             loss = loss + geo_loss
         return loss
 
@@ -46,7 +46,7 @@ def MultiViewGeometricRegularizerWrapper(
         model: GaussianModel,
         dataset: CameraDataset,
         *args,
-        multi_view_geo_weight=0.03,
+        geo_weight=0.03,
         max_reprojection_error=1.0,
         **configs) -> MultiViewGeometricRegularizer:
     return MultiViewGeometricRegularizer(
@@ -57,5 +57,5 @@ def MultiViewGeometricRegularizerWrapper(
             max_reprojection_error=max_reprojection_error,
             **configs,
         ),
-        multi_view_geo_weight=multi_view_geo_weight,
+        geo_weight=geo_weight,
     )
