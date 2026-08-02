@@ -4,6 +4,7 @@ from typing import Callable, Optional
 
 import torch
 import torch.nn.functional as F
+from tqdm import tqdm
 
 from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
@@ -117,7 +118,13 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
 
         candidate_indices = []
         visible_counts = []
-        for candidate_idx, candidate_cache in enumerate(self.camera_cache):
+        for candidate_idx, candidate_cache in tqdm(
+                enumerate(self.camera_cache),
+                total=len(self.camera_cache),
+                desc=f"Finding neighbors for camera {ref_idx}",
+                leave=False,
+                position=1,
+        ):
             if candidate_idx == ref_idx or candidate_cache is None:
                 continue
             visible = candidate_cache.visibility(ref_xyz, self.neighbor_view_depth_tolerance_ratio)
@@ -134,7 +141,11 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
     def update_nearest_cameras(self):
         self.nearest_indices = [
             self.find_nearest_camera_indices(ref_idx)
-            for ref_idx in range(len(self.camera_cache))
+            for ref_idx in tqdm(
+                range(len(self.camera_cache)),
+                desc="Updating nearest cameras",
+                position=0,
+            )
         ]
 
     def loss(self, out: dict, camera: Camera) -> torch.Tensor:
