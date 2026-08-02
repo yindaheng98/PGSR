@@ -55,6 +55,6 @@ def visibility(
         (z > min_depth)  # The point must be in front of the near clipping plane.
         & (pixels[..., 0] > 0) & (pixels[..., 0] < width)  # The projected x coordinate must be inside the image.
         & (pixels[..., 1] > 0) & (pixels[..., 1] < height)  # The projected y coordinate must be inside the image.
-        & torch.isfinite(rendered_depth) & (rendered_depth > 0)  # The sampled depth must be finite and positive.
+        & torch.isfinite(rendered_depth) & (rendered_depth > min_depth)  # The sampled depth must be in front of znear.
         & ((z - rendered_depth) < depth_threshold * rendered_depth)  # Reject points that are much farther than the depth map.
     )
