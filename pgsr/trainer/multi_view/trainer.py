@@ -85,6 +85,8 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
             base_trainer: AbstractTrainer,
             dataset: CameraDataset,
             regularizer: AbstractMultiViewRegularizer,
+            multi_view_regularize_from_iter=7000,
+            multi_view_regularize_until_iter=30000,
             neighbor_view_n_max=8,
             neighbor_view_update_interval=1000,
             neighbor_view_depth_tolerance_ratio=0.05,
@@ -93,6 +95,8 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         super().__init__(base_trainer)
         self.dataset = dataset
         self.regularizer = regularizer
+        self.multi_view_regularize_from_iter = multi_view_regularize_from_iter
+        self.multi_view_regularize_until_iter = multi_view_regularize_until_iter
         self.neighbor_view_n_max = neighbor_view_n_max
         self.neighbor_view_update_interval = neighbor_view_update_interval
         self.neighbor_view_depth_tolerance_ratio = neighbor_view_depth_tolerance_ratio
