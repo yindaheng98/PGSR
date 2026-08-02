@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 import torch
 
 from gaussian_splatting import Camera, GaussianModel
+from gaussian_splatting.dataset import CameraDataset
 
 
 class AbstractMultiViewRegularizer(ABC):
@@ -49,7 +50,7 @@ class NoopMultiViewRegularizer(AbstractMultiViewRegularizer):
     It is used as the base of all multi-view regularizer wrapper.
     '''
 
-    def __init__(self, model: GaussianModel):
+    def __init__(self, model: GaussianModel, dataset: CameraDataset):
         super().__init__()
         self._model = model
 
