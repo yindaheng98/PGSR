@@ -58,4 +58,4 @@ class NoopMultiViewRegularizer(AbstractMultiViewRegularizer):
         return self._model
 
     def regularize(self, out, camera, nearest_out, nearest_camera, step: int) -> torch.Tensor:
-        return out["depth"].new_zeros(())
+        return out["render"].new_zeros(())
