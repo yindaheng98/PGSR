@@ -191,9 +191,7 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
             cls,
             base_trainer_constructor: Callable[..., AbstractTrainer],
             regularizer_constructor: Callable[..., AbstractMultiViewRegularizer],
-            model: GaussianModel,
-            dataset: CameraDataset,
-            *args,
+            model: GaussianModel, dataset: CameraDataset, *args,
             # copy from MultiViewRegularizationTrainer.__init__
             multi_view_regularize_from_iter=7000,
             multi_view_regularize_until_iter=30000,

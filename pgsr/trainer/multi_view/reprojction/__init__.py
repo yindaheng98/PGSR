@@ -3,6 +3,21 @@ from .abc import (
     MultiViewReprojectionRegularizerWrapper,
     NoopMultiViewReprojectionRegularizer,
 )
-from .geometric import MultiViewGeometricRegularizer, MultiViewGeometricRegularizerWrapper
-from .photometric import MultiViewPhotometricRegularizer, MultiViewPhotometricRegularizerWrapper
-from .combinations import BasePGSRMultiViewRegularizer, PGSRMultiViewRegularizerWrapper
+from .geometric import (
+    MultiViewGeometricRegularizationTrainerWrapper,
+    MultiViewGeometricRegularizer,
+    MultiViewGeometricRegularizerWrapper,
+    MultiViewGeometricTrainerWrapper,
+)
+from .photometric import (
+    MultiViewPhotometricRegularizationTrainerWrapper,
+    MultiViewPhotometricRegularizer,
+    MultiViewPhotometricRegularizerWrapper,
+    MultiViewPhotometricTrainerWrapper,
+)
+from .combinations import (
+    BasePGSRMultiViewRegularizer,
+    PGSRMultiViewRegularizationTrainerWrapper,
+    PGSRMultiViewRegularizerWrapper,
+    PGSRMultiViewTrainerWrapper,
+)

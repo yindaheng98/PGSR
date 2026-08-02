@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Callable
 
 import torch
@@ -5,9 +6,15 @@ import torch.nn.functional as F
 
 from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
+from gaussian_splatting.trainer import AbstractTrainer
 
 from ....utils import lncc, patch_offsets, patch_warp
-from .abc import AbstractMultiViewReprojectionRegularizer, MultiViewReprojectionRegularizerWrapper
+from ..trainer import MultiViewRegularizationTrainer
+from .abc import (
+    AbstractMultiViewReprojectionRegularizer,
+    MultiViewReprojectionRegularizerWrapper,
+    NoopMultiViewReprojectionRegularizer,
+)
 
 
 class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
@@ -144,25 +151,44 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
 
 def MultiViewPhotometricRegularizerWrapper(
         base_regularizer_constructor: Callable[..., AbstractMultiViewReprojectionRegularizer],
-        model: GaussianModel,
-        dataset: CameraDataset,
-        *args,
+        model: GaussianModel, dataset: CameraDataset, *args,
         ncc_weight=0.15,
         ncc_patch_size=3,
         ncc_sample_num=102400,
         ncc_scale_factor=1.0,
-        max_reprojection_error=1.0,
         **configs) -> MultiViewPhotometricRegularizer:
     return MultiViewPhotometricRegularizer(
         base_regularizer_constructor(
-            model,
-            dataset,
-            *args,
-            max_reprojection_error=max_reprojection_error,
+            model, dataset, *args,
             **configs,
         ),
         ncc_weight=ncc_weight,
         ncc_patch_size=ncc_patch_size,
         ncc_sample_num=ncc_sample_num,
         ncc_scale_factor=ncc_scale_factor,
+    )
+
+
+def MultiViewPhotometricRegularizationTrainerWrapper(
+        base_trainer_constructor: Callable[..., AbstractTrainer],
+        base_regularizer_constructor: Callable[..., AbstractMultiViewReprojectionRegularizer],
+        model: GaussianModel, dataset: CameraDataset, *args,
+        **configs) -> MultiViewRegularizationTrainer:
+    return MultiViewRegularizationTrainer.from_regularizer_constructor(
+        base_trainer_constructor,
+        partial(MultiViewPhotometricRegularizerWrapper, base_regularizer_constructor),
+        model, dataset, *args,
+        **configs,
+    )
+
+
+def MultiViewPhotometricTrainerWrapper(
+        base_trainer_constructor: Callable[..., AbstractTrainer],
+        model: GaussianModel, dataset: CameraDataset, *args,
+        **configs) -> MultiViewRegularizationTrainer:
+    return MultiViewPhotometricRegularizationTrainerWrapper(
+        base_trainer_constructor,
+        NoopMultiViewReprojectionRegularizer,
+        model, dataset, *args,
+        **configs,
     )

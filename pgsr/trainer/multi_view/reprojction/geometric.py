@@ -1,11 +1,18 @@
+from functools import partial
 from typing import Callable
 
 import torch
 
 from gaussian_splatting import GaussianModel
 from gaussian_splatting.dataset import CameraDataset
+from gaussian_splatting.trainer import AbstractTrainer
 
-from .abc import AbstractMultiViewReprojectionRegularizer, MultiViewReprojectionRegularizerWrapper
+from ..trainer import MultiViewRegularizationTrainer
+from .abc import (
+    AbstractMultiViewReprojectionRegularizer,
+    MultiViewReprojectionRegularizerWrapper,
+    NoopMultiViewReprojectionRegularizer,
+)
 
 
 class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
@@ -43,19 +50,38 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
 
 def MultiViewGeometricRegularizerWrapper(
         base_regularizer_constructor: Callable[..., AbstractMultiViewReprojectionRegularizer],
-        model: GaussianModel,
-        dataset: CameraDataset,
-        *args,
+        model: GaussianModel, dataset: CameraDataset, *args,
         geo_weight=0.03,
-        max_reprojection_error=1.0,
         **configs) -> MultiViewGeometricRegularizer:
     return MultiViewGeometricRegularizer(
         base_regularizer_constructor(
-            model,
-            dataset,
-            *args,
-            max_reprojection_error=max_reprojection_error,
+            model, dataset, *args,
             **configs,
         ),
         geo_weight=geo_weight,
+    )
+
+
+def MultiViewGeometricRegularizationTrainerWrapper(
+        base_trainer_constructor: Callable[..., AbstractTrainer],
+        base_regularizer_constructor: Callable[..., AbstractMultiViewReprojectionRegularizer],
+        model: GaussianModel, dataset: CameraDataset, *args,
+        **configs) -> MultiViewRegularizationTrainer:
+    return MultiViewRegularizationTrainer.from_regularizer_constructor(
+        base_trainer_constructor,
+        partial(MultiViewGeometricRegularizerWrapper, base_regularizer_constructor),
+        model, dataset, *args,
+        **configs,
+    )
+
+
+def MultiViewGeometricTrainerWrapper(
+        base_trainer_constructor: Callable[..., AbstractTrainer],
+        model: GaussianModel, dataset: CameraDataset, *args,
+        **configs) -> MultiViewRegularizationTrainer:
+    return MultiViewGeometricRegularizationTrainerWrapper(
+        base_trainer_constructor,
+        NoopMultiViewReprojectionRegularizer,
+        model, dataset, *args,
+        **configs,
     )
