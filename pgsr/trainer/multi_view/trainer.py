@@ -60,6 +60,16 @@ class CameraCache:
         xyz = reconstruction(self.K, self.R_c2w, self.T_c2w, self.depth)
         return xyz[valid]
 
-    def visibility(self, xyz: torch.Tensor, depth_threshold: float, min_depth: float = 0.01, max_depth: float = 100.0) -> torch.Tensor:
+    def visibility(
+            self,
+            xyz: torch.Tensor,
+            relative_depth_tolerance: float,
+            min_depth: float = 0.01, max_depth: float = 100.0,
+    ) -> torch.Tensor:
         # Test the input world-space points against this cache's camera and depth map.
-        return visibility(self.K, self.R_c2w, self.T_c2w, self.depth, xyz, depth_threshold, min_depth, max_depth)
+        return visibility(
+            self.K, self.R_c2w, self.T_c2w, self.depth,
+            xyz,
+            relative_depth_tolerance,
+            min_depth, max_depth,
+        )
