@@ -107,8 +107,35 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         self.camera_cache: list[Optional[CameraCache]] = [None] * camera_count
         self.nearest_indices = [[] for _ in range(camera_count)]
 
+    def find_nearest_camera_indices(self, ref_idx: int) -> list[int]:
+        ref_cache = self.camera_cache[ref_idx]
+        if ref_cache is None:
+            return []
+        ref_xyz = ref_cache.reconstruction()
+        if ref_xyz.shape[0] == 0:
+            return []
+
+        candidate_indices = []
+        visible_counts = []
+        for candidate_idx, candidate_cache in enumerate(self.camera_cache):
+            if candidate_idx == ref_idx or candidate_cache is None:
+                continue
+            visible = candidate_cache.visibility(ref_xyz, self.neighbor_view_depth_tolerance_ratio)
+            candidate_indices.append(candidate_idx)
+            visible_counts.append(visible.sum())
+
+        if len(candidate_indices) == 0:
+            return []
+        visible_counts = torch.stack(visible_counts)
+        top_ids = torch.topk(visible_counts, min(self.neighbor_view_n_max, len(candidate_indices))).indices
+        top_ids = top_ids[visible_counts[top_ids] > 0].tolist()
+        return [candidate_indices[idx] for idx in top_ids]
+
     def update_nearest_cameras(self):
-        pass
+        self.nearest_indices = [
+            self.find_nearest_camera_indices(ref_idx)
+            for ref_idx in range(len(self.camera_cache))
+        ]
 
     def loss(self, out: dict, camera: Camera) -> torch.Tensor:
         loss = super().loss(out, camera)
