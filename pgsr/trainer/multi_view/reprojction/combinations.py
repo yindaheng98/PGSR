@@ -24,8 +24,7 @@ def MultiViewPhotometricGeometricRegularizer(
 
 
 def BaseMultiViewPhotometricGeometricRegularizer(model: GaussianModel, dataset: CameraDataset, **configs):
-    return MultiViewPhotometricGeometricRegularizer(
-        NoopMultiViewReprojectionRegularizer, model, dataset, **configs)
+    return MultiViewPhotometricGeometricRegularizer(NoopMultiViewReprojectionRegularizer, model, dataset, **configs)
 
 
 def MultiViewPhotometricGeometricRegularizationTrainerWrapper(
