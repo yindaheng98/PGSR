@@ -124,6 +124,16 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
         # Take median.
         return xyz.median(dim=0).values
 
+    def look_at_rotation(
+            self,
+            source_c2w: torch.Tensor,
+            camera_center: torch.Tensor,
+            target: torch.Tensor,
+    ) -> torch.Tensor:
+        forward = torch.nn.functional.normalize(target - camera_center, dim=0)
+        right = torch.nn.functional.normalize(torch.cross(source_c2w[:3, 1], forward, dim=0), dim=0)
+        return torch.stack((right, torch.cross(forward, right, dim=0), forward), dim=1)
+
     def compute_loss(
             self,
             out, camera,
