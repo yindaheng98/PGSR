@@ -31,9 +31,10 @@ def compute_valid_reprojection_and_ratio(
     pixels = pixels[valid_reprojection]
     source_reprojected_uv = source_reprojected_uv[valid_reprojection]
     source_reprojected_z = source_reprojected_z[valid_reprojection]
+    source_depth = out["depth"].squeeze()
     valid_reprojection_ratio = (
-        valid_reprojection.float().mean()
-        if valid_reprojection.numel() > 0
+        valid_reprojection.float().sum() / source_depth.numel()
+        if source_depth.numel() > 0
         else pixels.new_zeros(())
     )
     return pixels, source_reprojected_uv, source_reprojected_z, valid_reprojection_ratio
