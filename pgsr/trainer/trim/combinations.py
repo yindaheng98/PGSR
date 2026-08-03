@@ -24,4 +24,4 @@ def MultiViewTrimDensificationTrainerWrapper(
 
 
 def BaseMultiViewTrimDensificationTrainer(model: GaussianModel, dataset: CameraDataset, **configs) -> DensificationTrainer:
-    return MultiViewTrimDensificationTrainerWrapper(lambda model, dataset, **configs: NoopDensifier(model), model, dataset, **configs)
+    return MultiViewTrimDensificationTrainerWrapper(NoopDensifier, model, dataset, **configs)

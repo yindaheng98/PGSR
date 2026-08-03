@@ -1,0 +1,4 @@
+[project]
+name = "pgsr"
+version = "0.1.0"
+dependencies = ["gaussian-splatting>=2.6.5"]
