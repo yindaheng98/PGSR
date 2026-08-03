@@ -37,9 +37,7 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             pixels, source_reprojected_uv, source_reprojected_z,
             valid_reprojection_ratio, step,
         )
-        return loss + reprojection_loss(
-            pixels, source_reprojected_uv, valid_reprojection_ratio, self.geo_weight,
-        )
+        return loss + self.geo_weight * valid_reprojection_ratio * reprojection_loss(pixels, source_reprojected_uv)
 
 
 def MultiViewGeometricRegularizerWrapper(

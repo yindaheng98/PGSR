@@ -5,7 +5,7 @@ import torch
 from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 
-from ...reprojection import compute_valid_reprojection_and_ratio
+from ...reprojection import compute_valid_reprojection
 from ..abc import AbstractMultiViewRegularizer
 
 
@@ -21,10 +21,17 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
             out: dict, camera: Camera,
             nearest_out: dict, nearest_camera: Camera,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        return compute_valid_reprojection_and_ratio(
+        pixels, source_reprojected_uv, source_reprojected_z = compute_valid_reprojection(
             out, camera, nearest_out, nearest_camera,
             max_reprojection_error=self.max_reprojection_error,
         )
+        source_pixel_count = out["depth"].squeeze().numel()
+        valid_reprojection_ratio = (
+            pixels.new_tensor(pixels.shape[0] / source_pixel_count)
+            if source_pixel_count > 0
+            else pixels.new_zeros(())
+        )
+        return pixels, source_reprojected_uv, source_reprojected_z, valid_reprojection_ratio
 
     def regularize_with_nearest_gt_camera(
             self,

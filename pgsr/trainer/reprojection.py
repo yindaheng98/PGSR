@@ -9,11 +9,11 @@ from gaussian_splatting.trainer import AbstractTrainer, TrainerWrapper
 from ..utils import reconstruct_pixels, reprojection
 
 
-def compute_valid_reprojection_and_ratio(
+def compute_valid_reprojection(
         out: dict, camera: Camera,
         nearest_out: dict, nearest_camera: Camera,
         max_reprojection_error: float = 1.0,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     c2w = torch.linalg.inv(camera.world_view_transform)
     nearest_c2w = torch.linalg.inv(nearest_camera.world_view_transform)
     pixels, source_reprojected_uv, source_reprojected_z = reprojection(
@@ -31,20 +31,12 @@ def compute_valid_reprojection_and_ratio(
     pixels = pixels[valid_reprojection]
     source_reprojected_uv = source_reprojected_uv[valid_reprojection]
     source_reprojected_z = source_reprojected_z[valid_reprojection]
-    source_depth = out["depth"].squeeze()
-    valid_reprojection_ratio = (
-        valid_reprojection.float().sum() / source_depth.numel()
-        if source_depth.numel() > 0
-        else pixels.new_zeros(())
-    )
-    return pixels, source_reprojected_uv, source_reprojected_z, valid_reprojection_ratio
+    return pixels, source_reprojected_uv, source_reprojected_z
 
 
 def reprojection_loss(
         pixels: torch.Tensor,
         source_reprojected_uv: torch.Tensor,
-        valid_reprojection_ratio: torch.Tensor,
-        geo_weight: float = 0.03,
 ) -> torch.Tensor:
     if pixels.shape[0] == 0:
         return pixels.new_zeros(())
@@ -54,7 +46,7 @@ def reprojection_loss(
     # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L237
     weights = (1.0 / torch.exp(pixel_noise)).detach()
     # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L269-L271
-    return geo_weight * valid_reprojection_ratio * (weights * pixel_noise).mean()
+    return (weights * pixel_noise).mean()
 
 
 class VirtualCameraReprojectionTrainer(TrainerWrapper):
@@ -217,13 +209,17 @@ class VirtualCameraReprojectionTrainer(TrainerWrapper):
         with torch.no_grad():
             virtual_camera = self.sample_virtual_camera(out, camera, self.curr_step)
         virtual_out = self.model(virtual_camera)
-        pixels, source_reprojected_uv, _, valid_reprojection_ratio = compute_valid_reprojection_and_ratio(
+        pixels, source_reprojected_uv, _ = compute_valid_reprojection(
             out, camera, virtual_out, virtual_camera,
             max_reprojection_error=self.virtual_camera_max_reprojection_error,
         )
-        return loss + reprojection_loss(
-            pixels, source_reprojected_uv, valid_reprojection_ratio, self.geo_weight,
+        source_pixel_count = out["depth"].squeeze().numel()
+        valid_reprojection_ratio = (
+            pixels.new_tensor(pixels.shape[0] / source_pixel_count)
+            if source_pixel_count > 0
+            else pixels.new_zeros(())
         )
+        return loss + self.geo_weight * valid_reprojection_ratio * reprojection_loss(pixels, source_reprojected_uv)
 
 
 def VirtualCameraReprojectionTrainerWrapper(
