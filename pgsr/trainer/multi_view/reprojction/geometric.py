@@ -1,9 +1,9 @@
 from functools import partial
-from typing import Callable
+from typing import Callable, Optional
 
 import torch
 
-from gaussian_splatting import GaussianModel
+from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.trainer import AbstractTrainer
 
@@ -20,10 +20,34 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
     def __init__(
             self,
             base_regularizer: AbstractMultiViewReprojectionRegularizer,
+            dataset: CameraDataset,
             geo_weight=0.03,
+            virtual_camera_translation_min_scale=0.1,
+            virtual_camera_translation_max_scale=1.0,
+            virtual_camera_distance_update_interval=1000,
     ):
         super().__init__(base_regularizer)
+        self.dataset = dataset
         self.geo_weight = geo_weight
+        self.virtual_camera_translation_min_scale = virtual_camera_translation_min_scale
+        self.virtual_camera_translation_max_scale = virtual_camera_translation_max_scale
+        self.virtual_camera_distance_update_interval = virtual_camera_distance_update_interval
+        self.camera_indices = {
+            dataset[idx].ground_truth_image_path: idx
+            for idx in range(len(dataset))
+        }
+        self.camera_min_distances: Optional[torch.Tensor] = None
+        self.camera_min_distances_step: Optional[int] = None
+
+    def update_camera_min_distances(self):
+        cameras = [self.dataset[idx] for idx in range(len(self.dataset))]
+        centers = torch.stack([
+            camera.camera_center.detach()
+            for camera in cameras
+        ])
+        distances = torch.cdist(centers, centers)
+        distances.fill_diagonal_(float("inf"))
+        self.camera_min_distances = distances.min(dim=1).values
 
     def compute_loss(
             self,
