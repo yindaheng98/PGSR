@@ -16,7 +16,7 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
         # Maximum allowed round-trip reprojection error in pixels before a correspondence is rejected.
         self.max_reprojection_error = max_reprojection_error
 
-    def regularize_with_nearest_gt_camera(
+    def regularize(
             self,
             out: dict, camera: Camera,
             nearest_out: dict, nearest_camera: Camera,
