@@ -65,10 +65,12 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             nearest_out: dict, nearest_camera: Camera,
             pixels: torch.Tensor,
             source_reprojected_uv: torch.Tensor, source_reprojected_z: torch.Tensor,
+            valid_reprojection_ratio: torch.Tensor,
             step: int):
         loss = super().compute_loss(
             out, camera, nearest_out, nearest_camera,
-            pixels, source_reprojected_uv, source_reprojected_z, step,
+            pixels, source_reprojected_uv, source_reprojected_z,
+            valid_reprojection_ratio, step,
         )
         if pixels.shape[0] == 0:
             return loss
@@ -143,7 +145,7 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
         ncc = ncc[mask].squeeze()
 
         if mask.sum() > 0:
-            ncc_loss = ncc_weight * ncc.mean()
+            ncc_loss = ncc_weight * valid_reprojection_ratio * ncc.mean()
             loss = loss + ncc_loss
         return loss
 

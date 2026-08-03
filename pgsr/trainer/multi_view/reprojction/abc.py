@@ -20,7 +20,7 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
             self,
             out: dict, camera: Camera,
             nearest_out: dict, nearest_camera: Camera,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         c2w = torch.linalg.inv(camera.world_view_transform)
         nearest_c2w = torch.linalg.inv(nearest_camera.world_view_transform)
         pixels, source_reprojected_uv, source_reprojected_z = reprojection(
@@ -38,7 +38,12 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
         pixels = pixels[valid_reprojection]
         source_reprojected_uv = source_reprojected_uv[valid_reprojection]
         source_reprojected_z = source_reprojected_z[valid_reprojection]
-        return pixels, source_reprojected_uv, source_reprojected_z
+        valid_reprojection_ratio = (
+            valid_reprojection.float().mean()
+            if valid_reprojection.numel() > 0
+            else pixels.new_zeros(())
+        )
+        return pixels, source_reprojected_uv, source_reprojected_z, valid_reprojection_ratio
 
     def regularize_with_nearest_gt_camera(
             self,
@@ -46,12 +51,13 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
             nearest_out: dict, nearest_camera: Camera,
             step: int,
     ) -> torch.Tensor:
-        pixels, source_reprojected_uv, source_reprojected_z = self.compute_reprojection(
+        pixels, source_reprojected_uv, source_reprojected_z, valid_reprojection_ratio = self.compute_reprojection(
             out, camera, nearest_out, nearest_camera,
         )
         return self.compute_loss(
             out, camera, nearest_out, nearest_camera,
             pixels, source_reprojected_uv, source_reprojected_z,
+            valid_reprojection_ratio,
             step,
         )
 
@@ -63,6 +69,7 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
             pixels: torch.Tensor,
             source_reprojected_uv: torch.Tensor,
             source_reprojected_z: torch.Tensor,
+            valid_reprojection_ratio: torch.Tensor,
             step: int,
     ) -> torch.Tensor:
         raise NotImplementedError
@@ -84,10 +91,12 @@ class MultiViewReprojectionRegularizerWrapper(AbstractMultiViewReprojectionRegul
 
     def compute_loss(
             self, out, camera, nearest_out, nearest_camera,
-            pixels, source_reprojected_uv, source_reprojected_z, step) -> torch.Tensor:
+            pixels, source_reprojected_uv, source_reprojected_z,
+            valid_reprojection_ratio, step) -> torch.Tensor:
         return self.base_regularizer.compute_loss(
             out, camera, nearest_out, nearest_camera,
-            pixels, source_reprojected_uv, source_reprojected_z, step,
+            pixels, source_reprojected_uv, source_reprojected_z,
+            valid_reprojection_ratio, step,
         )
 
     def regularize_without_nearest_gt_camera(self, out, camera, step: int) -> torch.Tensor:
@@ -112,5 +121,6 @@ class NoopMultiViewReprojectionRegularizer(AbstractMultiViewReprojectionRegulari
 
     def compute_loss(
             self, out, camera, nearest_out, nearest_camera,
-            pixels, source_reprojected_uv, source_reprojected_z, step) -> torch.Tensor:
+            pixels, source_reprojected_uv, source_reprojected_z,
+            valid_reprojection_ratio, step) -> torch.Tensor:
         return out["render"].new_zeros(())
