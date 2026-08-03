@@ -83,15 +83,17 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
         with torch.no_grad():
             # Code source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L273-L281
             # sample mask
-            valid_indices = torch.arange(pixels.shape[0], device=pixels.device)
-            if valid_indices.shape[0] > sample_num:
-                valid_indices = valid_indices[torch.randperm(valid_indices.shape[0], device=pixels.device)[:sample_num]]
+            sample_indices = torch.arange(pixels.shape[0], device=pixels.device)
+            if sample_indices.shape[0] > sample_num:
+                sample_indices = sample_indices[torch.randperm(sample_indices.shape[0], device=pixels.device)[:sample_num]]
+            height, width = out["depth"].shape
+            map_indices = pixels[:, 1].to(torch.long) * width + pixels[:, 0].to(torch.long)[sample_indices]
             pixel_noise = torch.norm(source_reprojected_uv[:, :2] - pixels, dim=-1)
-            weights = torch.exp(-pixel_noise[valid_indices]).detach()
+            weights = torch.exp(-pixel_noise[sample_indices]).detach()
 
             # Code source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L282-L295
             # sample ref frame patch
-            pixels = pixels.reshape(-1, 2)[valid_indices]
+            pixels = pixels.reshape(-1, 2)[sample_indices]
             offsets = patch_offsets(patch_size, pixels.device)
             ori_pixels_patch = pixels.reshape(-1, 1, 2) * ncc_scale_factor + offsets.float()
 
@@ -104,7 +106,7 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
                 gt_image_gray[None, None],
                 pixels_patch.view(1, -1, 1, 2),
                 align_corners=True,
-            ).reshape(valid_indices.shape[0], total_patch_size)
+            ).reshape(sample_indices.shape[0], total_patch_size)
 
             ref_to_neareast_r = (
                 nearest_camera.world_view_transform[:3, :3].transpose(-1, -2)
@@ -118,8 +120,8 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
 
         # Code source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L297-L312
         # compute Homography
-        ref_local_n = out["render_normals"].permute(1, 2, 0).reshape(-1, 3)[valid_indices]
-        ref_local_d = out["rendered_distance"].reshape(-1)[valid_indices]
+        ref_local_n = out["render_normals"].permute(1, 2, 0).reshape(-1, 3)[map_indices]
+        ref_local_d = out["rendered_distance"].reshape(-1)[map_indices]
         H_ref_to_neareast = ref_to_neareast_r[None] - (
             ref_to_neareast_t[None, :, None] @ ref_local_n[:, None, :]
         ) / ref_local_d[:, None, None]
@@ -135,7 +137,7 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             nearest_image_gray[None, None],
             grid.reshape(1, -1, 1, 2),
             align_corners=True,
-        ).reshape(valid_indices.shape[0], total_patch_size)
+        ).reshape(sample_indices.shape[0], total_patch_size)
 
         # Code source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L322-L330
         # compute loss
