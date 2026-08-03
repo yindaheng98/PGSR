@@ -7,6 +7,7 @@ from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.trainer import AbstractTrainer
 
+from ....utils import reconstruct_pixels
 from ..trainer import MultiViewRegularizationTrainer
 from .abc import (
     AbstractMultiViewReprojectionRegularizer,
@@ -84,6 +85,44 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             * (max_radius ** 3 - min_radius ** 3) + min_radius ** 3
         ).pow(1.0 / 3.0)
         return direction * radius
+
+    def estimate_visible_region_median(self, out: dict, camera: Camera) -> Optional[torch.Tensor]:
+        """Estimate the median world point of the rendered visible region.
+
+        Reconstructing every depth pixel is expensive, so this randomly samples
+        visible pixels, reconstructs only those samples, and takes their xyz median.
+        """
+        depth = out["depth"].detach().squeeze()
+        # Compute valid indices in one pass.
+        valid = (depth > self.visible_sample_min_depth) & (depth < self.visible_sample_max_depth)
+        if "render_alphas" in out:
+            valid = valid & (out["render_alphas"].detach().squeeze() > self.visible_sample_min_alpha)
+        valid_indices = valid.reshape(-1).nonzero().squeeze(-1)
+        if valid_indices.shape[0] > self.visible_sample_count:
+            valid_indices = valid_indices[
+                torch.randperm(valid_indices.shape[0], device=valid_indices.device)[:self.visible_sample_count]
+            ]
+        # Flatten indices into grid coordinates.
+        height, width = depth.shape
+        grid_y = torch.div(valid_indices, width, rounding_mode="floor")
+        grid_x = valid_indices % width
+        # Sample depth and pixels.
+        sampled_depth = depth.reshape(-1)[valid_indices]
+        sampled_pixels = torch.stack((
+            grid_x.to(dtype=depth.dtype),
+            grid_y.to(dtype=depth.dtype),
+        ), dim=-1)
+        # Reconstruct xyz samples.
+        c2w = torch.linalg.inv(camera.world_view_transform.detach())
+        xyz = reconstruct_pixels(
+            camera.K.detach(),
+            c2w[:3, :3].transpose(-1, -2),
+            c2w[3, :3],
+            sampled_pixels,
+            sampled_depth,
+        )
+        # Take median.
+        return xyz.median(dim=0).values
 
     def compute_loss(
             self,
