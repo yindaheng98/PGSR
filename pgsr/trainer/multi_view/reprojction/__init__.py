@@ -16,8 +16,8 @@ from .photometric import (
     MultiViewPhotometricTrainerWrapper,
 )
 from .combinations import (
-    BasePGSRMultiViewRegularizer,
-    PGSRMultiViewRegularizationTrainerWrapper,
-    PGSRMultiViewRegularizerWrapper,
-    PGSRMultiViewTrainerWrapper,
+    BaseMultiViewPhotometricGeometricRegularizer,
+    MultiViewPhotometricGeometricRegularizationTrainerWrapper,
+    MultiViewPhotometricGeometricRegularizer,
+    MultiViewPhotometricGeometricTrainerWrapper,
 )

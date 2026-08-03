@@ -14,7 +14,7 @@ from .geometric import MultiViewGeometricRegularizerWrapper
 from .photometric import MultiViewPhotometricRegularizerWrapper
 
 
-def PGSRMultiViewRegularizerWrapper(
+def MultiViewPhotometricGeometricRegularizer(
         base_regularizer_constructor: Callable[..., AbstractMultiViewReprojectionRegularizer],
         model: GaussianModel, dataset: CameraDataset, *args,
         **configs) -> AbstractMultiViewReprojectionRegularizer:
@@ -23,28 +23,29 @@ def PGSRMultiViewRegularizerWrapper(
         model, dataset, *args, **configs)
 
 
-def BasePGSRMultiViewRegularizer(model: GaussianModel, dataset: CameraDataset, *args, **configs):
-    return PGSRMultiViewRegularizerWrapper(NoopMultiViewReprojectionRegularizer, model, dataset, *args, **configs)
+def BaseMultiViewPhotometricGeometricRegularizer(model: GaussianModel, dataset: CameraDataset, *args, **configs):
+    return MultiViewPhotometricGeometricRegularizer(
+        NoopMultiViewReprojectionRegularizer, model, dataset, *args, **configs)
 
 
-def PGSRMultiViewRegularizationTrainerWrapper(
+def MultiViewPhotometricGeometricRegularizationTrainerWrapper(
         base_trainer_constructor: Callable[..., AbstractTrainer],
         base_regularizer_constructor: Callable[..., AbstractMultiViewReprojectionRegularizer],
         model: GaussianModel, dataset: CameraDataset, *args,
         **configs) -> MultiViewRegularizationTrainer:
     return MultiViewRegularizationTrainer.from_regularizer_constructor(
         base_trainer_constructor,
-        partial(PGSRMultiViewRegularizerWrapper, base_regularizer_constructor),
+        partial(MultiViewPhotometricGeometricRegularizer, base_regularizer_constructor),
         model, dataset, *args,
         **configs,
     )
 
 
-def PGSRMultiViewTrainerWrapper(
+def MultiViewPhotometricGeometricTrainerWrapper(
         base_trainer_constructor: Callable[..., AbstractTrainer],
         model: GaussianModel, dataset: CameraDataset, *args,
         **configs) -> MultiViewRegularizationTrainer:
-    return PGSRMultiViewRegularizationTrainerWrapper(
+    return MultiViewPhotometricGeometricRegularizationTrainerWrapper(
         base_trainer_constructor,
         NoopMultiViewReprojectionRegularizer,
         model, dataset, *args,
