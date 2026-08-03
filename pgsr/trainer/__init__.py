@@ -4,4 +4,4 @@ from .depth_normal_consistency import (
     DepthNormalConsistencyTrainerWrapper,
 )
 from .reprojection import VirtualCameraReprojectionTrainer, VirtualCameraReprojectionTrainerWrapper
-from .combinations import BasePGSRTrainer, PGSRTrainerWrapper
+from .combinations import *
