@@ -1,36 +1,34 @@
-from functools import partial
 from typing import Callable
 
 from gaussian_splatting import GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.dataset.colmap import colmap_init
-from gaussian_splatting.trainer import (
-    AbstractTrainer,
-    BaseCameraTrainer,
-    BaseOpacityResetDensificationCameraTrainer,
-    BaseOpacityResetDensificationTrainer,
-    BaseSHLiftCameraTrainer,
-    BaseSHLiftOpacityResetDensificationCameraTrainer,
-    BaseSHLiftOpacityResetDensificationTrainer,
-    BaseSHLiftTrainer,
-    BaseTrainer,
-)
+from gaussian_splatting.trainer import AbstractTrainer
 
-from .trainer import PGSRTrainerWrapper
+from .trainer import (
+    PGSRTrainer,
+    PGSRCameraTrainer,
+    PGSROpacityResetDensificationCameraTrainer,
+    PGSROpacityResetDensificationTrainer,
+    SHLiftPGSRCameraTrainer,
+    SHLiftPGSROpacityResetDensificationCameraTrainer,
+    SHLiftPGSROpacityResetDensificationTrainer,
+    SHLiftPGSRTrainer,
+)
 
 
 backends = ["gsplat", "gsplat-2dgs"]
 basemodes = {
-    "base": partial(PGSRTrainerWrapper, BaseTrainer),
-    "densify": partial(PGSRTrainerWrapper, BaseOpacityResetDensificationTrainer),
-    "camera": partial(PGSRTrainerWrapper, BaseCameraTrainer),
-    "camera-densify": partial(PGSRTrainerWrapper, BaseOpacityResetDensificationCameraTrainer),
+    "base": PGSRTrainer,
+    "densify": PGSROpacityResetDensificationTrainer,
+    "camera": PGSRCameraTrainer,
+    "camera-densify": PGSROpacityResetDensificationCameraTrainer,
 }
 shliftmodes = {
-    "base": partial(PGSRTrainerWrapper, BaseSHLiftTrainer),
-    "densify": partial(PGSRTrainerWrapper, BaseSHLiftOpacityResetDensificationTrainer),
-    "camera": partial(PGSRTrainerWrapper, BaseSHLiftCameraTrainer),
-    "camera-densify": partial(PGSRTrainerWrapper, BaseSHLiftOpacityResetDensificationCameraTrainer),
+    "base": SHLiftPGSRTrainer,
+    "densify": SHLiftPGSROpacityResetDensificationTrainer,
+    "camera": SHLiftPGSRCameraTrainer,
+    "camera-densify": SHLiftPGSROpacityResetDensificationCameraTrainer,
 }
 
 
