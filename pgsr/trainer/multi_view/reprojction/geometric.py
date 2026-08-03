@@ -185,18 +185,51 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             loss += geo_loss
         return loss
 
+    def regularize_without_nearest_gt_camera(
+            self,
+            out: dict, camera: Camera,
+            step: int,
+    ) -> torch.Tensor:
+        with torch.no_grad():
+            virtual_camera = self.sample_virtual_camera(out, camera, step)
+        virtual_out = self.model(virtual_camera)
+        pixels, source_reprojected_uv, source_reprojected_z, valid_reprojection_ratio = self.compute_reprojection(
+            out, camera, virtual_out, virtual_camera,
+        )
+        return self.compute_loss(
+            out, camera, virtual_out, virtual_camera,
+            pixels, source_reprojected_uv, source_reprojected_z,
+            valid_reprojection_ratio,
+            step,
+        )
+
 
 def MultiViewGeometricRegularizerWrapper(
         base_regularizer_constructor: Callable[..., AbstractMultiViewReprojectionRegularizer],
         model: GaussianModel, dataset: CameraDataset, *args,
         geo_weight=0.03,
+        virtual_camera_translation_min_scale=0.1,
+        virtual_camera_translation_max_scale=1.0,
+        virtual_camera_distance_update_interval=1000,
+        visible_sample_count=4096,
+        visible_sample_min_depth=0.01,
+        visible_sample_max_depth=100.0,
+        visible_sample_min_alpha=1.0e-4,
         **configs) -> MultiViewGeometricRegularizer:
     return MultiViewGeometricRegularizer(
         base_regularizer_constructor(
             model, dataset, *args,
             **configs,
         ),
+        dataset,
         geo_weight=geo_weight,
+        virtual_camera_translation_min_scale=virtual_camera_translation_min_scale,
+        virtual_camera_translation_max_scale=virtual_camera_translation_max_scale,
+        camera_distance_update_interval=virtual_camera_distance_update_interval,
+        visible_sample_count=visible_sample_count,
+        visible_sample_min_depth=visible_sample_min_depth,
+        visible_sample_max_depth=visible_sample_max_depth,
+        visible_sample_min_alpha=visible_sample_min_alpha,
     )
 
 
