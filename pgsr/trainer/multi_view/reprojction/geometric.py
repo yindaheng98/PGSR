@@ -63,6 +63,20 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             dtype=camera.camera_center.dtype,
         )
 
+    def sample_translation(self, camera: Camera, step: int) -> Optional[torch.Tensor]:
+        min_distance = self.camera_min_distance(camera, step)
+        min_radius = min_distance * self.virtual_camera_translation_min_scale
+        max_radius = min_distance * self.virtual_camera_translation_max_scale
+
+        direction = torch.randn(3, device=min_distance.device, dtype=min_distance.dtype)
+        direction = direction / torch.linalg.norm(direction)
+        # Sample radius uniformly by shell volume, not uniformly by radius.
+        radius = (
+            torch.rand((), device=max_radius.device, dtype=max_radius.dtype)
+            * (max_radius ** 3 - min_radius ** 3) + min_radius ** 3
+        ).pow(1.0 / 3.0)
+        return direction * radius
+
     def compute_loss(
             self,
             out, camera,
