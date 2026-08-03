@@ -16,11 +16,12 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
         # Maximum allowed round-trip reprojection error in pixels before a correspondence is rejected.
         self.max_reprojection_error = max_reprojection_error
 
-    def compute_reprojection(
+    def regularize_with_nearest_gt_camera(
             self,
             out: dict, camera: Camera,
             nearest_out: dict, nearest_camera: Camera,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+            step: int,
+    ) -> torch.Tensor:
         pixels, source_reprojected_uv, source_reprojected_z = compute_valid_reprojection(
             out, camera, nearest_out, nearest_camera,
             max_reprojection_error=self.max_reprojection_error,
@@ -30,17 +31,6 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
             pixels.new_tensor(pixels.shape[0] / source_pixel_count)
             if source_pixel_count > 0
             else pixels.new_zeros(())
-        )
-        return pixels, source_reprojected_uv, source_reprojected_z, valid_reprojection_ratio
-
-    def regularize_with_nearest_gt_camera(
-            self,
-            out: dict, camera: Camera,
-            nearest_out: dict, nearest_camera: Camera,
-            step: int,
-    ) -> torch.Tensor:
-        pixels, source_reprojected_uv, source_reprojected_z, valid_reprojection_ratio = self.compute_reprojection(
-            out, camera, nearest_out, nearest_camera,
         )
         return self.compute_loss(
             out, camera, nearest_out, nearest_camera,
