@@ -55,6 +55,14 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
         self.camera_min_distances = distances.min(dim=1).values
         self.camera_min_distances_step = step
 
+    def camera_min_distance(self, camera: Camera, step: int) -> torch.Tensor:
+        self.update_camera_min_distances(step)
+        camera_idx = self.camera_indices[camera.ground_truth_image_path]
+        return self.camera_min_distances[camera_idx].to(
+            device=camera.camera_center.device,
+            dtype=camera.camera_center.dtype,
+        )
+
     def compute_loss(
             self,
             out, camera,
