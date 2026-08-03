@@ -112,6 +112,9 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
             neighbor_view_update_interval=1000,
             neighbor_view_depth_tolerance_ratio=0.05,
             neighbor_view_depth_scale_factor=0.25,
+            neighbor_valid_min_depth=0.01,
+            neighbor_valid_max_depth=100.0,
+            neighbor_valid_min_alpha=1.0e-4,
     ):
         super().__init__(base_trainer)
         self.dataset = dataset
@@ -122,6 +125,9 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         self.neighbor_view_update_interval = neighbor_view_update_interval
         self.neighbor_view_depth_tolerance_ratio = neighbor_view_depth_tolerance_ratio
         self.neighbor_view_depth_scale_factor = neighbor_view_depth_scale_factor
+        self.neighbor_valid_min_depth = neighbor_valid_min_depth
+        self.neighbor_valid_max_depth = neighbor_valid_max_depth
+        self.neighbor_valid_min_alpha = neighbor_valid_min_alpha
         camera_count = len(dataset)
         self.camera_indices = {dataset[idx].ground_truth_image_path: idx for idx in range(camera_count)}
         self.camera_cache: list[Optional[CameraCache]] = [None] * camera_count
@@ -131,7 +137,11 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         ref_cache = self.camera_cache[ref_idx]
         if ref_cache is None:
             return []
-        ref_xyz = ref_cache.reconstruction()
+        ref_xyz = ref_cache.reconstruction(
+            min_depth=self.neighbor_valid_min_depth,
+            max_depth=self.neighbor_valid_max_depth,
+            alpha_threshold=self.neighbor_valid_min_alpha,
+        )
         if ref_xyz.shape[0] == 0:
             return []
 
@@ -146,7 +156,13 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         ):
             if candidate_idx == ref_idx or candidate_cache is None:
                 continue
-            visible = candidate_cache.visibility(ref_xyz, self.neighbor_view_depth_tolerance_ratio)
+            visible = candidate_cache.visibility(
+                ref_xyz,
+                self.neighbor_view_depth_tolerance_ratio,
+                min_depth=self.neighbor_valid_min_depth,
+                max_depth=self.neighbor_valid_max_depth,
+                alpha_threshold=self.neighbor_valid_min_alpha,
+            )
             candidate_indices.append(candidate_idx)
             visible_counts.append(visible.sum())
 
@@ -199,6 +215,9 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
             neighbor_view_update_interval=1000,
             neighbor_view_depth_tolerance_ratio=0.05,
             neighbor_view_depth_scale_factor=0.25,
+            neighbor_valid_min_depth=0.01,
+            neighbor_valid_max_depth=100.0,
+            neighbor_valid_min_alpha=1.0e-4,
             # copy from MultiViewRegularizationTrainer.__init__
             **configs,
     ) -> "MultiViewRegularizationTrainer":
@@ -220,4 +239,7 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
             neighbor_view_update_interval=neighbor_view_update_interval,
             neighbor_view_depth_tolerance_ratio=neighbor_view_depth_tolerance_ratio,
             neighbor_view_depth_scale_factor=neighbor_view_depth_scale_factor,
+            neighbor_valid_min_depth=neighbor_valid_min_depth,
+            neighbor_valid_max_depth=neighbor_valid_max_depth,
+            neighbor_valid_min_alpha=neighbor_valid_min_alpha,
         )
