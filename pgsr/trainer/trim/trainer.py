@@ -42,7 +42,7 @@ class MultiViewTrimmer(DensifierWrapper):
     def densify_and_prune(self, loss, out, camera, step: int) -> DensificationInstruct:
         ret = super().densify_and_prune(loss, out, camera, step)
         if self.trim_from_iter <= step < self.trim_until_iter and step % self.trim_interval == 0:
-            trim_mask = self.trim_mask(camera)
+            trim_mask = self.trim_mask()
             remove_mask = trim_mask if ret.remove_mask is None else torch.logical_or(ret.remove_mask, trim_mask)
             ret = ret._replace(remove_mask=remove_mask)
         return ret
