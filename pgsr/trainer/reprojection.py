@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Optional
 
 import torch
 
@@ -125,7 +125,7 @@ class VirtualCameraReprojectionTrainer(TrainerWrapper):
         ).pow(1.0 / 3.0)
         return direction * radius
 
-    def estimate_visible_region_median(self, out: dict, camera: Camera) -> torch.Tensor:
+    def estimate_visible_region_median(self, out: dict, camera: Camera) -> Optional[torch.Tensor]:
         """Estimate the median world point of the rendered visible region.
 
         Reconstructing every depth pixel is expensive, so this randomly samples
@@ -137,6 +137,8 @@ class VirtualCameraReprojectionTrainer(TrainerWrapper):
         if "render_alphas" in out:
             valid = valid & (out["render_alphas"].detach().squeeze() > self.visible_sample_min_alpha)
         valid_indices = valid.reshape(-1).nonzero().squeeze(-1)
+        if valid_indices.numel() == 0:
+            return None  # no valid samples
         if valid_indices.shape[0] > self.visible_sample_count:
             valid_indices = valid_indices[
                 torch.randperm(valid_indices.shape[0], device=valid_indices.device)[:self.visible_sample_count]
@@ -173,12 +175,14 @@ class VirtualCameraReprojectionTrainer(TrainerWrapper):
         right = torch.nn.functional.normalize(torch.cross(source_c2w[:3, 1], forward, dim=0), dim=0)
         return torch.stack((right, torch.cross(forward, right, dim=0), forward), dim=1)
 
-    def sample_virtual_camera(self, out: dict, camera: Camera, step: int) -> Camera:
+    def sample_virtual_camera(self, out: dict, camera: Camera, step: int) -> Optional[Camera]:
         w2c = camera.world_view_transform.transpose(0, 1)
         c2w = torch.linalg.inv(w2c)
 
         translation = self.sample_translation(camera, step)
         target = self.estimate_visible_region_median(out, camera)
+        if target is None or not torch.isfinite(translation).all():
+            return None  # no valid samples
 
         c2w = c2w.clone()
         c2w[:3, 3] = c2w[:3, 3] + translation
@@ -208,6 +212,8 @@ class VirtualCameraReprojectionTrainer(TrainerWrapper):
 
         with torch.no_grad():
             virtual_camera = self.sample_virtual_camera(out, camera, self.curr_step)
+        if virtual_camera is None:
+            return loss
         virtual_out = self.model(virtual_camera)
         pixels, source_reprojected_uv, _ = compute_valid_reprojection(
             out, camera, virtual_out, virtual_camera,
