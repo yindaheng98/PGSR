@@ -1,28 +1,71 @@
-from functools import partial
 from typing import Callable
 
 import torch
 
 from gaussian_splatting import Camera, GaussianModel, build_camera
 from gaussian_splatting.dataset import CameraDataset
-from gaussian_splatting.trainer import AbstractTrainer
+from gaussian_splatting.trainer import AbstractTrainer, TrainerWrapper
 
-from ....utils import reconstruct_pixels
-from ..trainer import MultiViewRegularizationTrainer
-from .abc import (
-    AbstractMultiViewReprojectionRegularizer,
-    MultiViewReprojectionRegularizerWrapper,
-    NoopMultiViewReprojectionRegularizer,
-)
+from ..utils import reconstruct_pixels, reprojection
 
 
-class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
+def compute_valid_reprojection_and_ratio(
+        out: dict, camera: Camera,
+        nearest_out: dict, nearest_camera: Camera,
+        max_reprojection_error: float = 1.0,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    c2w = torch.linalg.inv(camera.world_view_transform)
+    nearest_c2w = torch.linalg.inv(nearest_camera.world_view_transform)
+    pixels, source_reprojected_uv, source_reprojected_z = reprojection(
+        source_K=camera.K,
+        source_R_c2w=c2w[:3, :3].transpose(-1, -2),
+        source_T_c2w=c2w[3, :3],
+        source_depth=out["depth"].squeeze(),
+        target_K=nearest_camera.K,
+        target_R_c2w=nearest_c2w[:3, :3].transpose(-1, -2),
+        target_T_c2w=nearest_c2w[3, :3],
+        target_depth=nearest_out["depth"].squeeze(),
+    )
+    reprojection_error = torch.norm(source_reprojected_uv[:, :2] - pixels, dim=-1)
+    valid_reprojection = reprojection_error < max_reprojection_error
+    pixels = pixels[valid_reprojection]
+    source_reprojected_uv = source_reprojected_uv[valid_reprojection]
+    source_reprojected_z = source_reprojected_z[valid_reprojection]
+    valid_reprojection_ratio = (
+        valid_reprojection.float().mean()
+        if valid_reprojection.numel() > 0
+        else pixels.new_zeros(())
+    )
+    return pixels, source_reprojected_uv, source_reprojected_z, valid_reprojection_ratio
+
+
+def reprojection_loss(
+        pixels: torch.Tensor,
+        source_reprojected_uv: torch.Tensor,
+        valid_reprojection_ratio: torch.Tensor,
+        geo_weight: float = 0.03,
+) -> torch.Tensor:
+    if pixels.shape[0] == 0:
+        return pixels.new_zeros(())
+
+    # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L234
+    pixel_noise = torch.norm(source_reprojected_uv[:, :2] - pixels, dim=-1)
+    # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L237
+    weights = (1.0 / torch.exp(pixel_noise)).detach()
+    # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L269-L271
+    return geo_weight * valid_reprojection_ratio * (weights * pixel_noise).mean()
+
+
+class VirtualCameraReprojectionTrainer(TrainerWrapper):
 
     def __init__(
             self,
-            base_regularizer: AbstractMultiViewReprojectionRegularizer,
+            base_trainer: AbstractTrainer,
             dataset: CameraDataset,
             geo_weight=0.03,
+            virtual_camera_max_reprojection_error: float = 1.0,
+            virtual_camera_reprojection_from_iter=7000,
+            virtual_camera_reprojection_until_iter=30000,
             virtual_camera_translation_min_scale=0.1,
             virtual_camera_translation_max_scale=1.0,
             camera_distance_update_interval=1000,
@@ -31,9 +74,12 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             visible_sample_max_depth=100.0,
             visible_sample_min_alpha=1.0e-4,
     ):
-        super().__init__(base_regularizer)
+        super().__init__(base_trainer)
         self.dataset = dataset
         self.geo_weight = geo_weight
+        self.virtual_camera_max_reprojection_error = virtual_camera_max_reprojection_error
+        self.virtual_camera_reprojection_from_iter = virtual_camera_reprojection_from_iter
+        self.virtual_camera_reprojection_until_iter = virtual_camera_reprojection_until_iter
         self.virtual_camera_translation_min_scale = virtual_camera_translation_min_scale
         self.virtual_camera_translation_max_scale = virtual_camera_translation_max_scale
         self.camera_distance_update_interval = camera_distance_update_interval
@@ -162,52 +208,30 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             postprocess=camera.postprocess,
         )
 
-    def compute_loss(
-            self,
-            out, camera,
-            nearest_out, nearest_camera,
-            pixels,
-            source_reprojected_uv, source_reprojected_z,
-            valid_reprojection_ratio,
-            step):
-        loss = super().compute_loss(
-            out, camera, nearest_out, nearest_camera,
-            pixels, source_reprojected_uv, source_reprojected_z,
-            valid_reprojection_ratio, step,
-        )
-        if pixels.shape[0] > 0:
-            # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L234
-            pixel_noise = torch.norm(source_reprojected_uv[:, :2] - pixels, dim=-1)
-            # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L237
-            weights = (1.0 / torch.exp(pixel_noise)).detach()
-            # Source: https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/train.py#L269-L271
-            geo_loss = self.geo_weight * valid_reprojection_ratio * (weights * pixel_noise).mean()
-            loss += geo_loss
-        return loss
+    def loss(self, out: dict, camera: Camera) -> torch.Tensor:
+        loss = super().loss(out, camera)
+        if not self.virtual_camera_reprojection_from_iter <= self.curr_step <= self.virtual_camera_reprojection_until_iter:
+            return loss
 
-    def regularize_without_nearest_gt_camera(
-            self,
-            out: dict, camera: Camera,
-            step: int,
-    ) -> torch.Tensor:
         with torch.no_grad():
-            virtual_camera = self.sample_virtual_camera(out, camera, step)
+            virtual_camera = self.sample_virtual_camera(out, camera, self.curr_step)
         virtual_out = self.model(virtual_camera)
-        pixels, source_reprojected_uv, source_reprojected_z, valid_reprojection_ratio = self.compute_reprojection(
+        pixels, source_reprojected_uv, _, valid_reprojection_ratio = compute_valid_reprojection_and_ratio(
             out, camera, virtual_out, virtual_camera,
+            max_reprojection_error=self.virtual_camera_max_reprojection_error,
         )
-        return self.compute_loss(
-            out, camera, virtual_out, virtual_camera,
-            pixels, source_reprojected_uv, source_reprojected_z,
-            valid_reprojection_ratio,
-            step,
+        return loss + reprojection_loss(
+            pixels, source_reprojected_uv, valid_reprojection_ratio, self.geo_weight,
         )
 
 
-def MultiViewGeometricRegularizerWrapper(
-        base_regularizer_constructor: Callable[..., AbstractMultiViewReprojectionRegularizer],
+def VirtualCameraReprojectionTrainerWrapper(
+        base_trainer_constructor: Callable[..., AbstractTrainer],
         model: GaussianModel, dataset: CameraDataset, *args,
         geo_weight=0.03,
+        virtual_camera_max_reprojection_error: float = 1.0,
+        virtual_camera_reprojection_from_iter=7000,
+        virtual_camera_reprojection_until_iter=30000,
         virtual_camera_translation_min_scale=0.1,
         virtual_camera_translation_max_scale=1.0,
         virtual_camera_distance_update_interval=1000,
@@ -215,14 +239,17 @@ def MultiViewGeometricRegularizerWrapper(
         visible_sample_min_depth=0.01,
         visible_sample_max_depth=100.0,
         visible_sample_min_alpha=1.0e-4,
-        **configs) -> MultiViewGeometricRegularizer:
-    return MultiViewGeometricRegularizer(
-        base_regularizer_constructor(
+        **configs) -> VirtualCameraReprojectionTrainer:
+    return VirtualCameraReprojectionTrainer(
+        base_trainer_constructor(
             model, dataset, *args,
             **configs,
         ),
         dataset,
         geo_weight=geo_weight,
+        virtual_camera_max_reprojection_error=virtual_camera_max_reprojection_error,
+        virtual_camera_reprojection_from_iter=virtual_camera_reprojection_from_iter,
+        virtual_camera_reprojection_until_iter=virtual_camera_reprojection_until_iter,
         virtual_camera_translation_min_scale=virtual_camera_translation_min_scale,
         virtual_camera_translation_max_scale=virtual_camera_translation_max_scale,
         camera_distance_update_interval=virtual_camera_distance_update_interval,
@@ -230,29 +257,4 @@ def MultiViewGeometricRegularizerWrapper(
         visible_sample_min_depth=visible_sample_min_depth,
         visible_sample_max_depth=visible_sample_max_depth,
         visible_sample_min_alpha=visible_sample_min_alpha,
-    )
-
-
-def MultiViewGeometricRegularizationTrainerWrapper(
-        base_trainer_constructor: Callable[..., AbstractTrainer],
-        base_regularizer_constructor: Callable[..., AbstractMultiViewReprojectionRegularizer],
-        model: GaussianModel, dataset: CameraDataset, *args,
-        **configs) -> MultiViewRegularizationTrainer:
-    return MultiViewRegularizationTrainer.from_regularizer_constructor(
-        base_trainer_constructor,
-        partial(MultiViewGeometricRegularizerWrapper, base_regularizer_constructor),
-        model, dataset, *args,
-        **configs,
-    )
-
-
-def MultiViewGeometricTrainerWrapper(
-        base_trainer_constructor: Callable[..., AbstractTrainer],
-        model: GaussianModel, dataset: CameraDataset, *args,
-        **configs) -> MultiViewRegularizationTrainer:
-    return MultiViewGeometricRegularizationTrainerWrapper(
-        base_trainer_constructor,
-        NoopMultiViewReprojectionRegularizer,
-        model, dataset, *args,
-        **configs,
     )
