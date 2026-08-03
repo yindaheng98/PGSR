@@ -1,5 +1,5 @@
 import torch
-from gsplat import rasterization
+from gsplat import rasterization, spherical_harmonics
 
 from gaussian_splatting import Camera
 from gaussian_splatting.models.gsplat import (
@@ -43,7 +43,7 @@ def render_plane(
 
 
 class GsplatPGSRGaussianModel(GsplatGaussianModel):
-    """PGSR geometry maps rendered through gsplat ``extra_signals``."""
+    """PGSR geometry maps rendered as alpha-composited gsplat features."""
 
     def __init__(self, sh_degree, render_depth_normal: bool = False):
         super().__init__(sh_degree)
@@ -71,28 +71,34 @@ class GsplatPGSRGaussianModel(GsplatGaussianModel):
 
         input_all_map = plane_params(viewpoint_camera, means3D, scales, rotations)
 
+        camera_center = torch.linalg.inv(viewmats[0])[:3, 3]
+        rgb = torch.clamp_min(spherical_harmonics(self.active_sh_degree, means3D - camera_center, shs) + 0.5, 0.0)
+
         render_colors, render_alphas, info = rasterization(
             means3D,
             rotations,
             scales,
             opacity,
-            shs,
+            # Gsplat-style renderers have no extra_signals argument, so append
+            # PGSR plane channels after RGB and let the rasterizer alpha-composite
+            # them together.
+            torch.cat((rgb, input_all_map), dim=-1)[None],
             viewmats,
             Ks,
             width,
             height,
-            sh_degree=self.active_sh_degree,
-            render_mode="RGB",
+            sh_degree=None,
+            render_mode="RGB+ED",
             packed=False,
             absgrad=True,
             rasterize_mode="antialiased" if self.antialiasing else "classic",
-            backgrounds=viewpoint_camera.bg_color[None],
-            # gsplat extra_signals carries PGSR's input_all_map through the RGB
-            # visibility, coverage and alpha compositing path.
-            extra_signals=input_all_map[None],
+            # Only RGB uses the image background; PGSR's appended channels use
+            # zero background so uncovered pixels contribute no plane signal.
+            backgrounds=torch.cat((viewpoint_camera.bg_color.to(means3D), torch.zeros(4, device=device, dtype=means3D.dtype)))[None],
         )
 
         rendered_image = render_colors[0, ..., 0:3].permute(2, 0, 1)
+        out_all_map = render_colors[..., 3:7]
 
         rendered_image = viewpoint_camera.postprocess(viewpoint_camera, rendered_image)
         rendered_image = rendered_image.clamp(0, 1)
@@ -105,26 +111,26 @@ class GsplatPGSRGaussianModel(GsplatGaussianModel):
         except:
             pass
 
-        depth, rendered_normal, rendered_distance, render_alphas = render_plane(info["render_extra_signals"], render_alphas, viewpoint_camera.K)
-        return_dict = {
-            "render": rendered_image,
-            "visibility_filter": (radii > 0).nonzero(),
-            "radii": radii,
+        depth, rendered_normal, rendered_distance, render_alphas = render_plane(out_all_map, render_alphas, viewpoint_camera.K)
+        plane_outputs = {
             "depth": depth,
             "invdepth": 1 / depth,
-            "get_viewspace_grad": lambda out: out["means2d"].grad.squeeze(0) * out["means2d"].new_tensor([[width, height]]) / 2.0,
-            "means2d": means2d,
-            # Additional outputs from PGSR (normals and distortion in 2DGS convention)
             "render_normals": rendered_normal,
             "render_alphas": render_alphas,
-            # PGSR specific output (distance in PGSR convention)
             "rendered_distance": rendered_distance,
         }
         if self.render_depth_normal:
             # https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/gaussian_renderer/__init__.py#L173-L175
-            depth_normal = render_normal(viewpoint_camera, return_dict["depth"].squeeze()) * return_dict["render_alphas"].detach()
-            return_dict.update({"normals_from_depth": depth_normal})  # in 2DGS convention
-        return return_dict
+            depth_normal = render_normal(viewpoint_camera, plane_outputs["depth"].squeeze()) * plane_outputs["render_alphas"].detach()
+            plane_outputs.update({"normals_from_depth": depth_normal})
+        return {
+            "render": rendered_image,
+            "visibility_filter": (radii > 0).nonzero(),
+            "radii": radii,
+            "get_viewspace_grad": lambda out: out["means2d"].grad.squeeze(0) * out["means2d"].new_tensor([[width, height]]) / 2.0,
+            "means2d": means2d,
+            **plane_outputs,
+        }
 
 
 class CameraTrainableGsplatPGSRGaussianModel(GsplatPGSRGaussianModel):

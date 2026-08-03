@@ -14,6 +14,7 @@ from .gsplat import CameraTrainableGsplatPGSRGaussianModel, render_plane
 def plane_params(
     viewpoint_camera: Camera,
     means3D: torch.Tensor,
+    # scales: torch.Tensor,
     rotations: torch.Tensor,
 ) -> torch.Tensor:
     """Build camera-facing [normal.xyz, plane_distance] per 2D Gaussian."""
@@ -77,15 +78,19 @@ class Gsplat2DGSPGSRGaussianModel(Gsplat2DGSGaussianModel):
             rotations,
             scales,
             opacity,
-            # 2DGS has no extra_signals argument, so append PGSR plane channels
-            # after RGB and let rasterization_2dgs alpha-composite them together.
-            torch.cat((rgb, input_all_map), dim=-1),
+            # Gsplat-style renderers have no extra_signals argument, so append
+            # PGSR plane channels after RGB and let the rasterizer alpha-composite
+            # them together.
+            torch.cat((rgb, input_all_map), dim=-1)[None],
             viewmats,
             Ks,
             width,
             height,
             sh_degree=None,
-            render_mode="RGB",
+            # Distortion regularization requires a depth render mode.  The
+            # appended expected-depth channel also pads RGB + four PGSR plane
+            # channels to the CUDA rasterizer's supported eight channels.
+            render_mode="RGB+ED",
             packed=False,
             # Only RGB uses the image background; PGSR's appended channels use
             # zero background so uncovered pixels contribute no plane signal.
