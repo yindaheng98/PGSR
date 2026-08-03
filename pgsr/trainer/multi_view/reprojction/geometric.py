@@ -1,9 +1,9 @@
 from functools import partial
-from typing import Callable, Optional
+from typing import Callable
 
 import torch
 
-from gaussian_splatting import Camera, GaussianModel
+from gaussian_splatting import Camera, GaussianModel, build_camera
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.trainer import AbstractTrainer
 
@@ -72,7 +72,7 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             dtype=camera.camera_center.dtype,
         )
 
-    def sample_translation(self, camera: Camera, step: int) -> Optional[torch.Tensor]:
+    def sample_translation(self, camera: Camera, step: int) -> torch.Tensor:
         min_distance = self.camera_min_distance(camera, step)
         min_radius = min_distance * self.virtual_camera_translation_min_scale
         max_radius = min_distance * self.virtual_camera_translation_max_scale
@@ -86,7 +86,7 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
         ).pow(1.0 / 3.0)
         return direction * radius
 
-    def estimate_visible_region_median(self, out: dict, camera: Camera) -> Optional[torch.Tensor]:
+    def estimate_visible_region_median(self, out: dict, camera: Camera) -> torch.Tensor:
         """Estimate the median world point of the rendered visible region.
 
         Reconstructing every depth pixel is expensive, so this randomly samples
@@ -133,6 +133,34 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
         forward = torch.nn.functional.normalize(target - camera_center, dim=0)
         right = torch.nn.functional.normalize(torch.cross(source_c2w[:3, 1], forward, dim=0), dim=0)
         return torch.stack((right, torch.cross(forward, right, dim=0), forward), dim=1)
+
+    def sample_virtual_camera(self, out: dict, camera: Camera, step: int) -> Camera:
+        w2c = camera.world_view_transform.transpose(0, 1)
+        c2w = torch.linalg.inv(w2c)
+
+        translation = self.sample_translation(camera, step)
+        target = self.estimate_visible_region_median(out, camera)
+
+        c2w = c2w.clone()
+        c2w[:3, 3] = c2w[:3, 3] + translation
+        rotation = self.look_at_rotation(c2w, c2w[:3, 3], target)
+        c2w[:3, :3] = rotation
+
+        w2c = torch.linalg.inv(c2w)
+        bg_color = tuple(camera.bg_color.detach().cpu().tolist())
+        return build_camera(
+            image_height=camera.image_height,
+            image_width=camera.image_width,
+            FoVx=camera.FoVx,
+            FoVy=camera.FoVy,
+            R=w2c[:3, :3],
+            T=w2c[:3, 3],
+            bg_color=bg_color,
+            device=camera.world_view_transform.device,
+            custom_data=camera.custom_data,
+        )._replace(
+            postprocess=camera.postprocess,
+        )
 
     def compute_loss(
             self,
