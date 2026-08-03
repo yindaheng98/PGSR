@@ -36,8 +36,8 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             dataset[idx].ground_truth_image_path: idx
             for idx in range(len(dataset))
         }
-        self.camera_min_distances: Optional[torch.Tensor] = None
-        self.camera_min_distances_step: Optional[int] = None
+        self.update_camera_min_distances()
+        self.camera_min_distances_step = 0
 
     def update_camera_min_distances(self):
         cameras = [self.dataset[idx] for idx in range(len(self.dataset))]
