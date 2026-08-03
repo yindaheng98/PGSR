@@ -64,9 +64,16 @@ def reprojection(
         torch.arange(width, device=source_depth.device, dtype=source_depth.dtype),
         indexing="ij",
     )
-    source_pixels = torch.stack((x, y), dim=-1).reshape(-1, 2)
+    source_pixels = torch.stack((x, y), dim=-1)
+    valid_mask = (source_depth > min_depth) & (source_depth < max_depth)
+    source_pixels = source_pixels[valid_mask]
+    source_depth_samples = source_depth[valid_mask]
+    if source_pixels.shape[0] == 0:
+        return source_pixels, source_pixels.new_empty((0, 3)), source_pixels.new_empty((0,))
 
-    source_world = reconstruction(source_K, source_R_c2w, source_T_c2w, source_depth).reshape(-1, 3)
+    source_world = reconstruct_pixels(
+        source_K, source_R_c2w, source_T_c2w, source_pixels, source_depth_samples,
+    )
     target_uv, target_z = projection(target_K, target_R_c2w, target_T_c2w, source_world)
     target_pixels = target_uv[:, :2]
 
