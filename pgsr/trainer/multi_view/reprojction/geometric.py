@@ -25,6 +25,10 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
             virtual_camera_translation_min_scale=0.1,
             virtual_camera_translation_max_scale=1.0,
             camera_distance_update_interval=1000,
+            visible_sample_count=4096,
+            visible_sample_min_depth=0.01,
+            visible_sample_max_depth=100.0,
+            visible_sample_min_alpha=1.0e-4,
     ):
         super().__init__(base_regularizer)
         self.dataset = dataset
@@ -32,6 +36,10 @@ class MultiViewGeometricRegularizer(MultiViewReprojectionRegularizerWrapper):
         self.virtual_camera_translation_min_scale = virtual_camera_translation_min_scale
         self.virtual_camera_translation_max_scale = virtual_camera_translation_max_scale
         self.camera_distance_update_interval = camera_distance_update_interval
+        self.visible_sample_count = visible_sample_count
+        self.visible_sample_min_depth = visible_sample_min_depth
+        self.visible_sample_max_depth = visible_sample_max_depth
+        self.visible_sample_min_alpha = visible_sample_min_alpha
         self.camera_indices = {
             dataset[idx].ground_truth_image_path: idx
             for idx in range(len(dataset))
