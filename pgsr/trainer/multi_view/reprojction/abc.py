@@ -5,7 +5,7 @@ import torch
 from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 
-from ....utils import reprojection
+from ...reprojection import compute_valid_reprojection_and_ratio
 from ..abc import AbstractMultiViewRegularizer
 
 
@@ -21,29 +21,10 @@ class AbstractMultiViewReprojectionRegularizer(AbstractMultiViewRegularizer):
             out: dict, camera: Camera,
             nearest_out: dict, nearest_camera: Camera,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        c2w = torch.linalg.inv(camera.world_view_transform)
-        nearest_c2w = torch.linalg.inv(nearest_camera.world_view_transform)
-        pixels, source_reprojected_uv, source_reprojected_z = reprojection(
-            source_K=camera.K,
-            source_R_c2w=c2w[:3, :3].transpose(-1, -2),
-            source_T_c2w=c2w[3, :3],
-            source_depth=out["depth"].squeeze(),
-            target_K=nearest_camera.K,
-            target_R_c2w=nearest_c2w[:3, :3].transpose(-1, -2),
-            target_T_c2w=nearest_c2w[3, :3],
-            target_depth=nearest_out["depth"].squeeze(),
+        return compute_valid_reprojection_and_ratio(
+            out, camera, nearest_out, nearest_camera,
+            max_reprojection_error=self.max_reprojection_error,
         )
-        reprojection_error = torch.norm(source_reprojected_uv[:, :2] - pixels, dim=-1)
-        valid_reprojection = reprojection_error < self.max_reprojection_error
-        pixels = pixels[valid_reprojection]
-        source_reprojected_uv = source_reprojected_uv[valid_reprojection]
-        source_reprojected_z = source_reprojected_z[valid_reprojection]
-        valid_reprojection_ratio = (
-            valid_reprojection.float().mean()
-            if valid_reprojection.numel() > 0
-            else pixels.new_zeros(())
-        )
-        return pixels, source_reprojected_uv, source_reprojected_z, valid_reprojection_ratio
 
     def regularize_with_nearest_gt_camera(
             self,
@@ -97,11 +78,6 @@ class MultiViewReprojectionRegularizerWrapper(AbstractMultiViewReprojectionRegul
             out, camera, nearest_out, nearest_camera,
             pixels, source_reprojected_uv, source_reprojected_z,
             valid_reprojection_ratio, step,
-        )
-
-    def regularize_without_nearest_gt_camera(self, out, camera, step: int) -> torch.Tensor:
-        return self.base_regularizer.regularize_without_nearest_gt_camera(
-            out, camera, step
         )
 
 

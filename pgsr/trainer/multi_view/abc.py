@@ -22,13 +22,6 @@ class AbstractMultiViewRegularizer(ABC):
     ) -> torch.Tensor:
         raise NotImplementedError
 
-    def regularize_without_nearest_gt_camera(
-            self,
-            out: dict, camera: Camera,
-            step: int,
-    ) -> torch.Tensor:
-        return out["render"].new_zeros(())
-
 
 class MultiViewRegularizerWrapper(AbstractMultiViewRegularizer):
     '''
@@ -48,12 +41,6 @@ class MultiViewRegularizerWrapper(AbstractMultiViewRegularizer):
         return self.base_regularizer.regularize_with_nearest_gt_camera(
             out, camera, nearest_out, nearest_camera, step
         )
-
-    def regularize_without_nearest_gt_camera(self, out, camera, step: int) -> torch.Tensor:
-        return self.base_regularizer.regularize_without_nearest_gt_camera(
-            out, camera, step
-        )
-
 
 class NoopMultiViewRegularizer(AbstractMultiViewRegularizer):
     '''
