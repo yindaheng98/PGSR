@@ -14,7 +14,9 @@ def get_img_grad_weight(img, beta=2.0):
     grad_img_y = torch.mean(torch.abs(top_point - bottom_point), 0, keepdim=True)
     grad_img = torch.cat((grad_img_x, grad_img_y), dim=0)
     grad_img, _ = torch.max(grad_img, dim=0)
-    grad_img = (grad_img - grad_img.min()) / (grad_img.max() - grad_img.min())
+    grad_min = grad_img.min()
+    grad_range = (grad_img.max() - grad_min).clamp_min(torch.finfo(grad_img.dtype).eps)
+    grad_img = (grad_img - grad_min) / grad_range
     grad_img = F.pad(grad_img[None, None], (1, 1, 1, 1), mode="constant", value=1.0).squeeze()
     return grad_img
 
