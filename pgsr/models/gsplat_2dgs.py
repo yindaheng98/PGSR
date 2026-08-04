@@ -123,8 +123,8 @@ class Gsplat2DGSPGSRGaussianModel(Gsplat2DGSGaussianModel):
         }
         if self.render_depth_normal:
             # https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/gaussian_renderer/__init__.py#L173-L175
-            depth_normal = render_normal(viewpoint_camera, plane_outputs["depth"].squeeze()) * plane_outputs["render_alphas"].detach()
-            plane_outputs.update({"normals_from_depth": depth_normal})
+            depth_normal = render_normal(viewpoint_camera, depth.squeeze(0)) * render_alphas.detach()
+            plane_outputs["normals_from_depth"] = depth_normal
         return {
             "render": rendered_image,
             "visibility_filter": (radii > 0).nonzero(),
