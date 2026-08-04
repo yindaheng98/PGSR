@@ -36,6 +36,8 @@ def render_plane(
     rendered_distance = out_all_map[..., 3:4]
     # https://github.com/zju3dv/PGSR/blob/e83f5cb41a49cc512964af11a794502aaa32cc8d/submodules/diff-plane-rasterization/cuda_rasterizer/forward.cu#L404
     plane_depth = rendered_distance / -((rendered_normal * rays[None]).sum(-1, keepdim=True) + 1.0e-8)
+    # Match original PGSR: zero-initialized plane maps leave uncovered depth
+    # at zero; no validity policy is applied by the renderer.
     depth = plane_depth[0].permute(2, 0, 1)
 
     # https://github.com/zju3dv/PGSR/blob/de24f1a38b350387e8d8fe381b2cd70c1ae946e7/gaussian_renderer/__init__.py#L153-L165
