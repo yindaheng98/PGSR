@@ -65,7 +65,6 @@ class VirtualCameraReprojectionTrainer(TrainerWrapper):
             visible_sample_count=4096,
             visible_sample_min_depth=0.01,
             visible_sample_max_depth=100.0,
-            visible_sample_min_alpha=1.0e-4,
     ):
         super().__init__(base_trainer)
         self.dataset = dataset
@@ -79,7 +78,6 @@ class VirtualCameraReprojectionTrainer(TrainerWrapper):
         self.visible_sample_count = visible_sample_count
         self.visible_sample_min_depth = visible_sample_min_depth
         self.visible_sample_max_depth = visible_sample_max_depth
-        self.visible_sample_min_alpha = visible_sample_min_alpha
         self.camera_indices = {
             dataset[idx].ground_truth_image_path: idx
             for idx in range(len(dataset))
@@ -134,8 +132,6 @@ class VirtualCameraReprojectionTrainer(TrainerWrapper):
         depth = out["depth"].detach().squeeze()
         # Compute valid indices in one pass.
         valid = (depth > self.visible_sample_min_depth) & (depth < self.visible_sample_max_depth)
-        if "render_alphas" in out:
-            valid = valid & (out["render_alphas"].detach().squeeze() > self.visible_sample_min_alpha)
         valid_indices = valid.reshape(-1).nonzero().squeeze(-1)
         if valid_indices.numel() == 0:
             return None  # no valid samples
@@ -241,7 +237,6 @@ def VirtualCameraReprojectionTrainerWrapper(
         visible_sample_count=4096,
         visible_sample_min_depth=0.01,
         visible_sample_max_depth=100.0,
-        visible_sample_min_alpha=1.0e-4,
         **configs) -> VirtualCameraReprojectionTrainer:
     return VirtualCameraReprojectionTrainer(
         base_trainer_constructor(
@@ -259,5 +254,4 @@ def VirtualCameraReprojectionTrainerWrapper(
         visible_sample_count=visible_sample_count,
         visible_sample_min_depth=visible_sample_min_depth,
         visible_sample_max_depth=visible_sample_max_depth,
-        visible_sample_min_alpha=visible_sample_min_alpha,
     )

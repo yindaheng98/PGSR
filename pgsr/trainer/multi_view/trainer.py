@@ -20,14 +20,12 @@ class CameraCache:
     R_c2w: torch.Tensor
     T_c2w: torch.Tensor
     depth: torch.Tensor
-    alpha: Optional[torch.Tensor]
 
     @classmethod
     def from_camera(
             cls,
             camera: Camera,
             depth: torch.Tensor,
-            alpha: Optional[torch.Tensor] = None,
             scale_factor: float = 1.0,
     ) -> "CameraCache":
         K = camera.K.detach().clone()
@@ -41,32 +39,19 @@ class CameraCache:
                 mode="nearest",
             )
         depth = depth[0, 0].contiguous()
-        if alpha is not None:
-            alpha = alpha.detach().squeeze()[None, None]
-            if scale_factor != 1:
-                alpha = F.interpolate(
-                    alpha,
-                    scale_factor=scale_factor,
-                    mode="nearest",
-                )
-            alpha = alpha[0, 0].contiguous()
         return cls(
             K=K,
             R_c2w=c2w[:3, :3].transpose(-1, -2),
             T_c2w=c2w[3, :3],
             depth=depth,
-            alpha=alpha,
         )
 
     def reconstruction(
             self,
             min_depth: float = 0.01, max_depth: float = 100.0,
-            alpha_threshold: float = 1e-4,
     ) -> torch.Tensor:
         # Keep only depths inside the trusted range before returning xyz samples.
         valid = (self.depth > min_depth) & (self.depth < max_depth)
-        if self.alpha is not None:
-            valid = valid & (self.alpha >= alpha_threshold)
         height, width = self.depth.shape
         y, x = torch.meshgrid(
             torch.arange(height, device=self.depth.device, dtype=self.depth.dtype),
@@ -84,18 +69,13 @@ class CameraCache:
             xyz: torch.Tensor,
             relative_depth_tolerance: float,
             min_depth: float = 0.01, max_depth: float = 100.0,
-            alpha_threshold: float = 1e-4,
     ) -> torch.Tensor:
         # Test the input world-space points against this cache's camera and depth map.
-        depth_mask = (self.depth > min_depth) & (self.depth < max_depth)
-        if self.alpha is not None:
-            depth_mask = depth_mask & (self.alpha >= alpha_threshold)
         return visibility(
             K=self.K, R_c2w=self.R_c2w, T_c2w=self.T_c2w,
             depth=self.depth, xyz=xyz,
             relative_depth_tolerance=relative_depth_tolerance,
             min_depth=min_depth, max_depth=max_depth,
-            depth_mask=depth_mask,
         )
 
 
@@ -114,7 +94,6 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
             neighbor_view_depth_scale_factor=0.25,
             neighbor_valid_min_depth=0.01,
             neighbor_valid_max_depth=100.0,
-            neighbor_valid_min_alpha=1.0e-4,
     ):
         super().__init__(base_trainer)
         self.dataset = dataset
@@ -127,7 +106,6 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         self.neighbor_view_depth_scale_factor = neighbor_view_depth_scale_factor
         self.neighbor_valid_min_depth = neighbor_valid_min_depth
         self.neighbor_valid_max_depth = neighbor_valid_max_depth
-        self.neighbor_valid_min_alpha = neighbor_valid_min_alpha
         camera_count = len(dataset)
         self.camera_indices = {dataset[idx].ground_truth_image_path: idx for idx in range(camera_count)}
         self.camera_cache: list[Optional[CameraCache]] = [None] * camera_count
@@ -140,7 +118,6 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         ref_xyz = ref_cache.reconstruction(
             min_depth=self.neighbor_valid_min_depth,
             max_depth=self.neighbor_valid_max_depth,
-            alpha_threshold=self.neighbor_valid_min_alpha,
         )
         if ref_xyz.shape[0] == 0:
             return []
@@ -161,7 +138,6 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
                 self.neighbor_view_depth_tolerance_ratio,
                 min_depth=self.neighbor_valid_min_depth,
                 max_depth=self.neighbor_valid_max_depth,
-                alpha_threshold=self.neighbor_valid_min_alpha,
             )
             candidate_indices.append(candidate_idx)
             visible_counts.append(visible.sum())
@@ -188,8 +164,8 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
         camera_idx = self.camera_indices[camera.ground_truth_image_path]
         with torch.no_grad():
             self.camera_cache[camera_idx] = CameraCache.from_camera(
-                camera, out["depth"], out.get("render_alphas"),
-                self.neighbor_view_depth_scale_factor,
+                camera, out["depth"],
+                scale_factor=self.neighbor_view_depth_scale_factor,
             )
         if not self.multi_view_regularize_from_iter <= self.curr_step <= self.multi_view_regularize_until_iter:
             return loss
@@ -217,7 +193,6 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
             neighbor_view_depth_scale_factor=0.25,
             neighbor_valid_min_depth=0.01,
             neighbor_valid_max_depth=100.0,
-            neighbor_valid_min_alpha=1.0e-4,
             # copy from MultiViewRegularizationTrainer.__init__
             **configs,
     ) -> "MultiViewRegularizationTrainer":
@@ -241,5 +216,4 @@ class MultiViewRegularizationTrainer(TrainerWrapper):
             neighbor_view_depth_scale_factor=neighbor_view_depth_scale_factor,
             neighbor_valid_min_depth=neighbor_valid_min_depth,
             neighbor_valid_max_depth=neighbor_valid_max_depth,
-            neighbor_valid_min_alpha=neighbor_valid_min_alpha,
         )
