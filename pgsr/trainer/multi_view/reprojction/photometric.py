@@ -88,7 +88,7 @@ class MultiViewPhotometricRegularizer(MultiViewReprojectionRegularizerWrapper):
                 sample_indices = sample_indices[torch.randperm(sample_indices.shape[0], device=pixels.device)[:sample_num]]
             pixels = pixels[sample_indices]
             source_reprojected_uv = source_reprojected_uv[sample_indices]
-            _, height, width = out["depth"].shape
+            height, width = out["depth"].shape[-2:]
             map_indices = pixels[:, 1].to(torch.long) * width + pixels[:, 0].to(torch.long)
             pixel_noise = torch.norm(source_reprojected_uv[:, :2] - pixels, dim=-1)
             weights = torch.exp(-pixel_noise).detach()
