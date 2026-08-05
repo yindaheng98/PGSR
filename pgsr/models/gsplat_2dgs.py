@@ -116,7 +116,7 @@ class Gsplat2DGSPGSRGaussianModel(Gsplat2DGSGaussianModel):
         depth, rendered_normal, rendered_distance, render_alphas = render_plane(out_all_map, render_alphas, viewpoint_camera.K)
         plane_outputs = {
             "depth": depth,
-            "invdepth": 1 / depth,
+            "invdepth": self.inverse_depth(depth),
             "render_normals": rendered_normal,
             "render_alphas": render_alphas,
             "rendered_distance": rendered_distance,
