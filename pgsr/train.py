@@ -16,7 +16,7 @@ from pgsr.prepare import backends, basemodes, prepare_gaussians, prepare_trainer
 def prepare_training(
         sh_degree: int, source: str, device: str, mode: str,
         trainable_camera: bool = False, load_ply: str = None, load_camera: str = None,
-        load_mask=True, load_depth=True, backend: str = "gsplat-2dgs",
+        load_mask=True, load_depth=True, backend: str = "gsplat",
         configs={}) -> Tuple[CameraDataset, GaussianModel, AbstractTrainer]:
     dataset = prepare_dataset(source=source, device=device, trainable_camera=trainable_camera, load_camera=load_camera, load_mask=load_mask, load_depth=load_depth)
     gaussians = prepare_gaussians(sh_degree=sh_degree, source=source, device=device, trainable_camera=trainable_camera, load_ply=load_ply, backend=backend)
@@ -27,7 +27,7 @@ def prepare_training(
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--sh_degree", default=3, type=int)
-    parser.add_argument("--backend", choices=backends, default="gsplat-2dgs")
+    parser.add_argument("--backend", choices=backends, default="gsplat")
     parser.add_argument("-s", "--source", required=True, type=str)
     parser.add_argument("-d", "-m", "--destination", required=True, type=str)
     parser.add_argument("-i", "--iteration", "--iterations", default=30000, type=int)
