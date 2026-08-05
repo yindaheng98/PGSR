@@ -1,4 +1,38 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "pgsr"
-version = "0.1.0"
-dependencies = ["gaussian-splatting>=2.8.0"]
+version = "1.0.0"
+description = "Planar-based Gaussian Splatting Reconstruction utilities built on gaussian-splatting."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "LicenseRef-PGSR-NonCommercial"
+license-files = ["LICENSE.md"]
+authors = [{ name = "yindaheng98", email = "yindaheng98@gmail.com" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+dependencies = ["gaussian-splatting>=2.8.4", "gsplat", "numpy", "torch", "tqdm"]
+
+[project.optional-dependencies]
+mesh = ["open3d", "trimesh"]
+scripts = ["opencv-python", "plyfile", "lpips", "pytorch3d"]
+viewer = ["gaussian-splatting[viewer]>=2.8.4"]
+
+[project.urls]
+Homepage = "https://zju3dv.github.io/pgsr/"
+Repository = "https://github.com/yindaheng98/PGSR"
+Paper = "https://arxiv.org/abs/2406.06521"
+
+[tool.setuptools]
+packages = { find = { include = ["pgsr*"] } }

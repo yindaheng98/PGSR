@@ -1,3 +1,168 @@
+# PGSR: Planar-based Gaussian Splatting for Efficient and High-Fidelity Surface Reconstruction (Python Package Version)
+
+[![PyPI version](https://img.shields.io/pypi/v/pgsr.svg?logo=pypi)](https://pypi.org/project/pgsr/)
+[![Downloads](https://api.pepy.tech/personalized-badge/pgsr?period=month&left_color=grey&right_color=brightgreen&left_text=monthly%20downloads)](https://pepy.tech/project/pgsr)
+[![Total downloads](https://api.pepy.tech/personalized-badge/pgsr?period=total&left_color=grey&right_color=brightgreen&left_text=total%20downloads)](https://pepy.tech/project/pgsr)
+[![Build](https://github.com/yindaheng98/PGSR/actions/workflows/build-release.yml/badge.svg)](https://github.com/yindaheng98/PGSR/actions/workflows/build-release.yml)
+
+This repository contains the **refactored Python package for [PGSR](https://github.com/zju3dv/PGSR)**. It is ported from commit [de24f1a38b350387e8d8fe381b2cd70c1ae946e7](https://github.com/zju3dv/PGSR/tree/de24f1a38b350387e8d8fe381b2cd70c1ae946e7). The original components have been reorganized into a standard Python package and adapted to the reusable APIs provided by [`gaussian-splatting`](https://github.com/yindaheng98/gaussian-splatting).
+
+## Features
+
+* [x] Code organized as a standard Python package
+* [x] `gsplat` and `gsplat-2dgs` rendering backends
+* [x] Planar scale regularization
+* [x] Depth-normal consistency
+* [x] Multi-view photometric and geometric regularization
+* [x] Virtual-camera reprojection
+* [x] Multi-view trimming and opacity-reset densification
+* [x] Optional camera-pose optimization
+* [x] Rendering, mesh extraction, and interactive viewing
+
+## Prerequisites
+
+* [PyTorch](https://pytorch.org/) with CUDA support
+* A CUDA Toolkit version compatible with the installed PyTorch build
+* Python 3.10 or later
+
+Optional features can be installed through package extras:
+
+```shell
+pip install --upgrade "pgsr[mesh,viewer]"
+```
+
+If you have trouble installing [`gaussian-splatting`](https://github.com/yindaheng98/gaussian-splatting), install it from source:
+
+```shell
+pip install wheel setuptools
+pip install --upgrade git+https://github.com/yindaheng98/gaussian-splatting.git@master --no-build-isolation
+```
+
+## PyPI Install
+
+```shell
+pip install --upgrade pgsr
+```
+
+Or install the latest version from source:
+
+```shell
+pip install wheel setuptools
+pip install --upgrade git+https://github.com/yindaheng98/PGSR.git@main --no-build-isolation
+```
+
+### Development Install
+
+```shell
+git clone https://github.com/yindaheng98/PGSR.git
+cd PGSR
+pip install --editable .
+```
+
+## Quick Start
+
+1. Prepare a dataset in the COLMAP format used by [`gaussian-splatting`](https://github.com/yindaheng98/gaussian-splatting). For example, download the Tanks and Temples + Deep Blending dataset:
+
+```shell
+wget https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/datasets/input/tandt_db.zip -P ./data
+unzip data/tandt_db.zip -d data/
+```
+
+2. Train PGSR with densification:
+
+```shell
+python -m pgsr.train -s data/truck -d output/truck -i 30000 --mode densify --backend gsplat --no_image_mask --no_depth_data
+```
+
+3. Render the trained model:
+
+```shell
+python -m pgsr.render -s data/truck -d output/truck -i 30000 --backend gsplat --no_image_mask
+```
+
+4. Extract a mesh (requires the `mesh` extra):
+
+```shell
+python -m pgsr.mesh -s data/truck -d output/truck -i 30000 --backend gsplat --no_image_mask -o max_depth=10.0 -o voxel_size=0.01
+```
+
+5. Open the interactive viewer (requires the `viewer` extra):
+
+```shell
+python -m pgsr.viewer -d output/truck -i 30000 --backend gsplat --port 8080
+```
+
+> 💡 This package does not include dataset preprocessing or evaluation scripts. Refer to the [original PGSR repository](https://github.com/zju3dv/PGSR) for the DTU, Tanks and Temples, and Mip-NeRF 360 workflows.
+
+> 💡 See [.vscode/launch.json](.vscode/launch.json) for more examples. Run `python -m pgsr.train --help`, `python -m pgsr.render --help`, `python -m pgsr.mesh --help`, or `python -m pgsr.viewer --help` for all command-line options.
+
+## Backends and Training Modes
+
+Two rendering backends are available:
+
+* `gsplat` (default)
+* `gsplat-2dgs`
+
+The training entry point supports the following modes:
+
+* `base`: PGSR regularization without densification
+* `densify` (default): PGSR regularization with multi-view trimming, opacity reset, and densification
+* `camera`: `base` with trainable camera poses
+* `camera-densify`: `densify` with trainable camera poses
+
+Use repeated `-o key=value` arguments to override trainer configuration values:
+
+```shell
+python -m pgsr.train -s data/truck -d output/truck -o densify_grad_threshold=0.0001 -o opacity_cull_threshold=0.05
+```
+
+## API Usage
+
+This project builds on [`gaussian-splatting`](https://github.com/yindaheng98/gaussian-splatting) and provides PGSR Gaussian models and composed trainers. Refer to that package for the core Gaussian model, dataset, trainer, and training-loop concepts.
+
+The high-level factory prepares the dataset, Gaussian model, and trainer:
+
+```python
+from pgsr.train import prepare_training
+
+dataset, gaussians, trainer = prepare_training(
+    sh_degree=3,
+    source="data/truck",
+    device="cuda",
+    mode="densify",
+    backend="gsplat",
+    load_mask=False,
+    load_depth=False,
+    configs={"densify_grad_threshold": 0.0001},
+)
+```
+
+The lower-level factories can also be used independently:
+
+```python
+from gaussian_splatting.prepare import prepare_dataset
+from pgsr.prepare import prepare_gaussians, prepare_trainer
+
+dataset = prepare_dataset(
+    source="data/truck",
+    device="cuda",
+    load_mask=False,
+    load_depth=False,
+)
+gaussians = prepare_gaussians(
+    sh_degree=3,
+    source="data/truck",
+    device="cuda",
+    backend="gsplat",
+)
+trainer = prepare_trainer(
+    gaussians=gaussians,
+    dataset=dataset,
+    mode="densify",
+    configs={"densify_grad_threshold": 0.0001},
+)
+```
+
 # PGSR: Planar-based Gaussian Splatting for Efficient and High-Fidelity Surface Reconstruction
 Danpeng Chen, Hai Li, [Weicai Ye](https://ywcmaike.github.io/), Yifan Wang, Weijian Xie, Shangjin Zhai, Nan Wang, Haomin Liu, Hujun Bao, [Guofeng Zhang](http://www.cad.zju.edu.cn/home/gfzhang/)
 ### [Project Page](https://zju3dv.github.io/pgsr/) | [arXiv](https://arxiv.org/abs/2406.06521)
@@ -26,115 +191,6 @@ The F1 Score↑ on the TnT dataset
 |Truck|0.60|0.66
 |Mean|0.50|0.51
 |Time|1.2h|45m
-
-## Installation
-
-The repository contains submodules, thus please check it out with 
-```shell
-# SSH
-git clone git@github.com:zju3dv/PGSR.git
-cd PGSR
-
-conda create -n pgsr python=3.8
-conda activate pgsr
-
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 #replace your cuda version
-pip install -r requirements.txt
-pip install submodules/diff-plane-rasterization
-pip install submodules/simple-knn
-```
-
-## Dataset Preprocess
-Please download the preprocessed DTU dataset from [2DGS](https://surfsplatting.github.io/), the Tanks and Temples dataset from [official webiste](https://www.tanksandtemples.org/download/), the Mip-NeRF 360 dataset from the [official webiste](https://jonbarron.info/mipnerf360/). You need to download the ground truth point clouds from the [DTU dataset](https://roboimagedata.compute.dtu.dk/?page_id=36). For the Tanks and Temples dataset, you need to download the reconstruction, alignment and cropfiles from the [official webiste](https://jonbarron.info/mipnerf360/). 
-
-The data folder should like this:
-```shell
-data
-├── dtu_dataset
-│   ├── dtu
-│   │   ├── scan24
-│   │   │   ├── images
-│   │   │   ├── mask
-│   │   │   ├── sparse
-│   │   │   ├── cameras_sphere.npz
-│   │   │   └── cameras.npz
-│   │   └── ...
-│   ├── dtu_eval
-│   │   ├── Points
-│   │   │   └── stl
-│   │   └── ObsMask
-├── tnt_dataset
-│   ├── tnt
-│   │   ├── Ignatius
-│   │   │   ├── images_raw
-│   │   │   ├── Ignatius_COLMAP_SfM.log
-│   │   │   ├── Ignatius_trans.txt
-│   │   │   ├── Ignatius.json
-│   │   │   ├── Ignatius_mapping_reference.txt
-│   │   │   └── Ignatius.ply
-│   │   └── ...
-└── MipNeRF360
-    ├── bicycle
-    └── ...
-```
-
-Then run the scripts to preprocess Tanks and Temples dataset:
-```shell
-# Install COLMAP
-Refer to https://colmap.github.io/install.html
-
-# Tanks and Temples dataset
-python scripts/preprocess/convert_tnt.py --tnt_path your_tnt_path
-```
-
-## Training and Evaluation
-```shell
-# Fill in the relevant parameters in the script, then run it.
-
-# DTU dataset
-python scripts/run_dtu.py
-
-# Tanks and Temples dataset
-python scripts/run_tnt.py
-
-# Mip360 dataset
-python scripts/run_mip360.py
-```
-
-## Custom Dataset
-The data folder should like this:
-```shell
-data
-├── data_name1
-│   └── input
-│       ├── *.jpg/*.png
-│       └── ...
-├── data_name2
-└── ...
-```
-Then run the following script to preprocess the dataset and to train and test:
-```shell
-# Preprocess dataset
-python scripts/preprocess/convert.py --data_path your_data_path
-```
-
-#### Some Suggestions:
-- Adjust the threshold for selecting the nearest frame in ModelParams based on the dataset;
-- -r n: Downsample the images by a factor of n to accelerate the training speed;
-- --max_abs_split_points 0: For weakly textured scenes, to prevent overfitting in areas with weak textures, we recommend disabling this splitting strategy by setting it to 0;
-- --opacity_cull_threshold 0.05: To reduce the number of Gaussian point clouds in a simple way, you can set this threshold.
-```shell
-# Training
-python train.py -s data_path -m out_path --max_abs_split_points 0 --opacity_cull_threshold 0.05
-```
-
-#### Some Suggestions:
-- Adjust max_depth and voxel_size based on the dataset;
-- --use_depth_filter: Enable depth filtering to remove potentially inaccurate depth points using single-view and multi-view techniques. For scenes with floating points or insufficient viewpoints, it is recommended to turn this on.
-```shell
-# Rendering and Extract Mesh
-python render.py -m out_path --max_depth 10.0 --voxel_size 0.01
-```
 
 ## Acknowledgements
 This project is built upon [3DGS](https://github.com/graphdeco-inria/gaussian-splatting). Densify is based on [AbsGau](https://ty424.github.io/AbsGS.github.io/) and [GOF](https://github.com/autonomousvision/gaussian-opacity-fields?tab=readme-ov-file). DTU and Tanks and Temples dataset preprocess are based on [Neuralangelo scripts](https://github.com/NVlabs/neuralangelo/blob/main/DATA_PROCESSING.md). Evaluation scripts for DTU and Tanks and Temples dataset are based on [DTUeval-python](https://github.com/jzhangbs/DTUeval-python) and [TanksAndTemples](https://github.com/isl-org/TanksAndTemples/tree/master/python_toolbox/evaluation) respectively. We thank all the authors for their great work and repos. 
