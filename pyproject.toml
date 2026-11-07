@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pgsr"
-version = "1.0.0"
+version = "1.0.1"
 description = "Planar-based Gaussian Splatting Reconstruction utilities built on gaussian-splatting."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
-dependencies = ["gaussian-splatting>=2.8.4", "gsplat", "numpy", "torch", "tqdm"]
+dependencies = ["gaussian-splatting>=2.11.2", "gsplat", "numpy", "torch", "tqdm"]
 
 [project.optional-dependencies]
 mesh = ["open3d", "trimesh"]
